@@ -72,6 +72,7 @@ tidyr::expand_grid(
 
 
 
+radius <- 3.501
 
 hex_grid_3_5_vertical |>
   dplyr::mutate(
@@ -119,6 +120,67 @@ hex_grid_3_5_vertical |>
   ggplot2::geom_segment(
     ggplot2::aes(x = point_6_x, xend = point_1_x, y = point_6_y, yend = point_1_y)
   )
+
+hex_grid_3_5_vertical |>
+  ggplot2::ggplot() +
+  off_zone_markings() +
+  ggplot2::geom_point(ggplot2::aes(x = x, y = y), size = 3)
+
+
+
+
+
+radius <- 3.001
+
+hex_grid_3_vertical |>
+  dplyr::mutate(
+    point_1_x = x,
+    point_1_y = y + ((radius/sqrt(3))*2),
+    point_2_x = x + radius,
+    point_2_y = y + (radius / sqrt(3)),
+    point_3_x = x + radius,
+    point_3_y = y - (radius / sqrt(3)),
+    point_4_x = x,
+    point_4_y = y - ((radius/sqrt(3))*2),
+    point_5_x = x - radius,
+    point_5_y = y - (radius / sqrt(3)),
+    point_6_x = x - radius,
+    point_6_y = y + (radius / sqrt(3))
+  ) |>
+  dplyr::bind_rows(
+    tibble::tibble(
+      x = 0,
+      y =
+        seq(
+          6 + radius,
+          64,
+          by = radius * 2
+        )
+    )
+  ) |>
+  ggplot2::ggplot() +
+  off_zone_markings() +
+  ggplot2::geom_segment(
+    ggplot2::aes(x = point_1_x, xend = point_2_x, y = point_1_y, yend = point_2_y)
+  ) +
+  ggplot2::geom_segment(
+    ggplot2::aes(x = point_2_x, xend = point_3_x, y = point_2_y, yend = point_3_y)
+  ) +
+  ggplot2::geom_segment(
+    ggplot2::aes(x = point_3_x, xend = point_4_x, y = point_3_y, yend = point_4_y)
+  ) +
+  ggplot2::geom_segment(
+    ggplot2::aes(x = point_4_x, xend = point_5_x, y = point_4_y, yend = point_5_y)
+  ) +
+  ggplot2::geom_segment(
+    ggplot2::aes(x = point_5_x, xend = point_6_x, y = point_5_y, yend = point_6_y)
+  ) +
+  ggplot2::geom_segment(
+    ggplot2::aes(x = point_6_x, xend = point_1_x, y = point_6_y, yend = point_1_y)
+  )
+
+
+
 
 
 
