@@ -131,6 +131,7 @@ hex_grid_3_vertical <-
       y = seq(1 + radius + (radius * sqrt(3)), 64 - radius, by = (radius/sqrt(3))*2*3)
     )
   ) |>
+  dplyr::filter(!(abs(x) == max(x) & y == min(y))) |>
   dplyr::bind_rows(
     tibble::tibble(
       x = 0,
@@ -182,6 +183,7 @@ hex_grid_3_horizontal <-
       y = seq(1 + (2 * radius), 64 - radius, by = radius * 2)
     )
   ) |>
+  dplyr::filter(!(abs(x) == max(x) & y == min(y))) |>
   dplyr::bind_rows(
     tibble::tibble(
       x = 0,
@@ -229,7 +231,7 @@ hex_grid_2_5_vertical <-
     tidyr::expand_grid(
       x =
         c(
-          seq(-4 - (2 * radius), -43  - radius, by = -radius * 2),
+          seq(-4 - (2 * radius), -43 + radius, by = -radius * 2),
           seq(4 + (2 * radius), 43 - radius, by = radius * 2)
         ),
       y = seq(1 + radius + (radius * sqrt(3)), 64 - radius, by = (radius/sqrt(3))*2*3)
@@ -503,6 +505,58 @@ coord_map_lookup_table <-
       )
   )
 
+coord_map_lookup_table |>
+  tidyr::unnest(nearest_cell_3_5_vertical) |>
+  dplyr::mutate(
+    hex_id = hex_id / max(hex_id),
+    method = "3.5 ft Radius, Vertical Alignment"
+  ) |>
+  dplyr::bind_rows(
+    coord_map_lookup_table |>
+      tidyr::unnest(nearest_cell_3_vertical) |>
+      dplyr::mutate(
+        hex_id = hex_id / max(hex_id),
+        method = "3 ft Radius, Vertical Alignment")
+  ) |>
+  dplyr::bind_rows(
+    coord_map_lookup_table |>
+      tidyr::unnest(nearest_cell_2_5_vertical) |>
+      dplyr::mutate(
+        hex_id = hex_id / max(hex_id),
+        method = "2.5 ft Radius, Vertical Alignment")
+  ) |>
+  dplyr::bind_rows(
+    coord_map_lookup_table |>
+      tidyr::unnest(nearest_cell_3_5_horizontal) |>
+      dplyr::mutate(
+        hex_id = hex_id / max(hex_id),
+        method = "3.5 ft Radius, Horizontal Alignment")
+  ) |>
+  dplyr::bind_rows(
+    coord_map_lookup_table |>
+      tidyr::unnest(nearest_cell_3_horizontal) |>
+      dplyr::mutate(
+        hex_id = hex_id / max(hex_id),
+        method = "3 ft Radius, Horizontal Alignment")
+  ) |>
+  dplyr::bind_rows(
+    coord_map_lookup_table |>
+      tidyr::unnest(nearest_cell_2_5_horizontal) |>
+      dplyr::mutate(
+        hex_id = hex_id / max(hex_id),
+        method = "2.5 ft Radius, Horizontal Alignment")
+  ) |>
+  dplyr::mutate(method = method |> factor() |> forcats::fct_inorder()) |>
+  ggplot2::ggplot() +
+  ggplot2::facet_wrap(
+    ggplot2::vars(method),
+    ncol = 3
+  ) +
+  off_zone_markings(show_behind_net = T, show_neutral_zone = T, big_net = T) +
+  ggplot2::geom_tile(ggplot2::aes(x = x, y = y, fill = hex_id), alpha = 0.7) +
+  ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
+  ggplot2::scale_fill_viridis_c()
+
 
 
 coord_map_lookup_table |>
@@ -552,48 +606,5 @@ coord_map_lookup_table |>
   ggplot2::geom_tile(ggplot2::aes(x = x, y = y, fill = hex_id), alpha = 0.7) +
   ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
   ggplot2::scale_fill_viridis_c()
-
-
-
-
-coord_map_lookup_table |>
-  tidyr::unnest(nearest_cell_3_5_vertical) |>
-  dplyr::mutate(method = "3.5 ft Radius, Vertical Alignment") |>
-  dplyr::bind_rows(
-    coord_map_lookup_table |>
-      tidyr::unnest(nearest_cell_3_vertical) |>
-      dplyr::mutate(method = "3 ft Radius, Vertical Alignment")
-  ) |>
-  dplyr::bind_rows(
-    coord_map_lookup_table |>
-      tidyr::unnest(nearest_cell_3_vertical) |>
-      dplyr::mutate(method = "2.5 ft Radius, Vertical Alignment")
-  ) |>
-  dplyr::bind_rows(
-    coord_map_lookup_table |>
-      tidyr::unnest(nearest_cell_3_5_horizontal) |>
-      dplyr::mutate(method = "3.5 ft Radius, Horizontal Alignment")
-  ) |>
-  dplyr::bind_rows(
-    coord_map_lookup_table |>
-      tidyr::unnest(nearest_cell_3_horizontal) |>
-      dplyr::mutate(method = "3 ft Radius, Horizontal Alignment")
-  ) |>
-  dplyr::bind_rows(
-    coord_map_lookup_table |>
-      tidyr::unnest(nearest_cell_2_5_horizontal) |>
-      dplyr::mutate(method = "2.5 ft Radius, Horizontal Alignment")
-  ) |>
-  dplyr::mutate(method = method |> factor() |> forcats::fct_inorder()) |>
-  ggplot2::ggplot() +
-  ggplot2::facet_wrap(
-    ggplot2::vars(method),
-    ncol = 3
-  ) +
-  off_zone_markings() +
-  ggplot2::geom_tile(ggplot2::aes(x = x, y = y, fill = hex_id), alpha = 0.7) +
-  ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
-  ggplot2::scale_fill_viridis_c()
-
 
 
