@@ -60,20 +60,6 @@ off_zone_markings <-
     }
 
     list(
-      # blue line
-      ggplot2::geom_rect(
-        data =
-          tibble::tibble(
-            xmin = -42.5,
-            xmax = 42.5,
-            ymin = 63,
-            ymax = 64
-          ),
-        mapping = ggplot2::aes(
-          xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax
-        ),
-        fill = "#0033A0"
-      ),
       # center line
       ggplot2::geom_rect(
         data =
@@ -87,6 +73,33 @@ off_zone_markings <-
           xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax
         ),
         fill = "#C8102E"
+      ),
+      # white markings on center line
+      ggplot2::geom_rect(
+        data = tibble::tibble(
+          xmin = seq(-42.5, 42.5, by = 2),
+          xmax = seq(-41.5, 42.5, by = 2),
+          ymin = 88.5,
+          ymax = 89.5
+        ),
+        mapping = ggplot2::aes(
+          xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax
+        ),
+        fill = "white"
+      ),
+      # blue line
+      ggplot2::geom_rect(
+        data =
+          tibble::tibble(
+            xmin = -42.5,
+            xmax = 42.5,
+            ymin = 63,
+            ymax = 64
+          ),
+        mapping = ggplot2::aes(
+          xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax
+        ),
+        fill = "#0033A0"
       ),
       # faceoff dot red centers
       ggforce::geom_circle(
@@ -127,18 +140,6 @@ off_zone_markings <-
         color = "#C8102E",
         alpha = 0
       ),
-      # # NZ faceoff dots
-      # ggforce::geom_circle(
-      #   data =
-      #     tibble::tibble(
-      #       x = c(-22, 22),
-      #       y = 69,
-      #       r = 1
-      #     ),
-      #   mapping = ggplot2::aes(x0 = x, y0 = y, r = r),
-      #   fill = "#C8102E",
-      #   color = "#C8102E"
-      # ),
       # center faceoff dot
       ggforce::geom_circle(
         data =
@@ -176,7 +177,7 @@ off_zone_markings <-
         fill = "#41B6E6",
         color = "#C8102E"
       ),
-      # white rects to cover goalie crease
+      # white areas to cover edges of goalie crease
       ggplot2::geom_rect(
         data =
           tibble::tibble(
@@ -283,6 +284,8 @@ off_zone_markings <-
           tibble::tibble(
             x =
               c(
+                # center line border
+                -42.5, -42.5,
                 # inside hash marks (horizontal)
                 -22 - (23/6), -22 - (23/6), -22 + (5/6), -22 + (5/6),
                 22 - (23/6), 22 - (23/6),  22 + (5/6), 22 + (5/6),
@@ -305,6 +308,8 @@ off_zone_markings <-
               ),
             xend =
               c(
+                # center line border
+                42.5, 42.5,
                 # inside hash marks (horizontal)
                 -22 - (5/6), -22 - (5/6), -22 + (23/6), -22 + (23/6),
                 22 - (5/6), 22 - (5/6),  22 + (23/6), 22 + (23/6),
@@ -327,6 +332,8 @@ off_zone_markings <-
               ),
             y =
               c(
+                # center line border
+                89.5, 88.5,
                 # inside hash marks (horizontal)
                 22, 18, 22, 18, 22, 18, 22, 18,
                 # inside hash marks (vertical)
@@ -344,6 +351,8 @@ off_zone_markings <-
               ),
             yend =
               c(
+                # center line border
+                89.5, 88.5,
                 # inside hash marks (horizontal)
                 22, 18, 22, 18, 22, 18, 22, 18,
                 # inside hash marks (vertical)
