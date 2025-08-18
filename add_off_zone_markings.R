@@ -1,5 +1,5 @@
 off_zone_markings <-
-  function(legend_position = "none", show_behind_net = F, show_neutral_zone = F, big_net = F) {
+  function(legend_position = "none", show_behind_net = F, show_neutral_zone = F, big_net = F, direction = "down") {
     net_radius <- ifelse(big_net, 20/12, 18/12)
     net_depth <- ifelse(big_net, 44/12, 40/12)
     net_max_width <- ifelse(big_net, 96/12, 88/12)
@@ -7,6 +7,57 @@ off_zone_markings <-
     net_curve_center_x <- (net_max_width / 2) - net_radius
     net_curve_center_y <- net_depth - net_radius
     net_post_x_diff = 3 - net_curve_center_x
+
+    right_goal_joint_front_x <-
+      (net_curve_center_x) +
+      sqrt(
+        net_radius**2 -
+          (
+            sin(
+              (pi / 2) -
+                acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) -
+                atan(net_post_x_diff / net_curve_center_y)
+            ) *
+              net_radius
+          )**2
+      )
+    left_goal_joint_front_x <-
+      (-net_curve_center_x) -
+      sqrt(
+        net_radius**2 -
+          (
+            sin(
+              (pi / 2) -
+                acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) -
+                atan(net_post_x_diff / net_curve_center_y)
+            ) *
+              net_radius
+          )**2
+      )
+    goal_joint_front_y <-
+      (-net_curve_center_y) + (
+        sin(
+          (pi / 2) -
+            acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) -
+            atan(net_post_x_diff / net_curve_center_y)
+        ) *
+          net_radius
+      )
+    right_goal_joint_back_x <- net_curve_center_x
+    left_goal_joint_back_x <- -net_curve_center_x
+    goal_joint_back_y <- -net_depth
+
+    xlims <- c(-42.5, 42.5)
+    ylims <-
+      c(
+        ifelse(show_behind_net, -11, 0),
+        ifelse(show_neutral_zone, 89.5, 64)
+      )
+
+    if (direction == "up") {
+      xlims <- rev(xlims)
+      ylims <- rev(ylims)
+    }
 
     list(
       # blue line
@@ -37,30 +88,57 @@ off_zone_markings <-
         ),
         fill = "#C8102E"
       ),
-      # OZ faceoff dots
+      # faceoff dot red centers
       ggforce::geom_circle(
         data =
           tibble::tibble(
-            x = c(-22, 22),
-            y = 20,
+            x = c(-22, 22, -22, 22),
+            y = c(20, 20, 69, 69),
             r = 1
           ),
         mapping = ggplot2::aes(x0 = x, y0 = y, r = r),
         fill = "#C8102E",
         color = "#C8102E"
       ),
-      # NZ faceoff dots
+      # faceoff dot white spaces
+      ggplot2::geom_rect(
+        data =
+          tibble::tibble(
+            xmin = c(-23, -23, 21, 21, -23, -23, 21, 21),
+            xmax = c(21, 21, 23, 23, 21, 21, 23, 23),
+            ymin = c(20.75, 19, 20.75, 19, 69.75, 68, 69.75, 68),
+            ymax = c(21, 19.25, 21, 19.25, 70, 68.25, 70, 68.25)
+          ),
+        mapping = ggplot2::aes(
+          xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax
+        ),
+        fill = "white"
+      ),
+      # faceoff dot outside lines
       ggforce::geom_circle(
         data =
           tibble::tibble(
-            x = c(-22, 22),
-            y = 69,
+            x = c(-22, 22, -22, 22),
+            y = c(20, 20, 69, 69),
             r = 1
           ),
         mapping = ggplot2::aes(x0 = x, y0 = y, r = r),
         fill = "#C8102E",
-        color = "#C8102E"
+        color = "#C8102E",
+        alpha = 0
       ),
+      # # NZ faceoff dots
+      # ggforce::geom_circle(
+      #   data =
+      #     tibble::tibble(
+      #       x = c(-22, 22),
+      #       y = 69,
+      #       r = 1
+      #     ),
+      #   mapping = ggplot2::aes(x0 = x, y0 = y, r = r),
+      #   fill = "#C8102E",
+      #   color = "#C8102E"
+      # ),
       # center faceoff dot
       ggforce::geom_circle(
         data =
@@ -112,6 +190,94 @@ off_zone_markings <-
         ),
         fill = "white"
       ),
+      # net color (curved sections)
+      ggforce::geom_circle(
+        tibble::tibble(
+          x = c(-net_curve_center_x, net_curve_center_x),
+          y = -net_curve_center_y,
+          r = net_radius
+        ),
+        mapping = ggplot2::aes(x0 = x, y0 = y, r = r),
+        linewidth = 0,
+        color = "lightgrey",
+        fill = "lightgrey"
+      ),
+      # net color (straight sections)
+      ggplot2::geom_polygon(
+        data =
+          tibble::tibble(
+            x =
+              c(
+                # left post
+                -3,
+                # right post
+                3,
+                right_goal_joint_front_x,
+                right_goal_joint_back_x,
+                left_goal_joint_back_x,
+                left_goal_joint_front_x
+              ),
+            y = c(
+              0,
+              0,
+              goal_joint_front_y,
+              goal_joint_back_y,
+              goal_joint_back_y,
+              goal_joint_front_y
+            )
+          ),
+        mapping = ggplot2::aes(x = x, y = y),
+        fill = "lightgrey"
+      ),
+      # goal straight lines
+      ggplot2::geom_segment(
+        data =
+          tibble::tibble(
+            x = c(-3, left_goal_joint_back_x, 3),
+            xend =
+              c(
+                left_goal_joint_front_x,
+                right_goal_joint_back_x,
+                right_goal_joint_front_x
+              ),
+            y = c(0, goal_joint_back_y, 0),
+            yend =
+              c(
+                goal_joint_front_y,
+                goal_joint_back_y,
+                goal_joint_front_y
+              )
+          ),
+        mapping = ggplot2::aes(
+          x = x, xend = xend, y = y, yend = yend
+        ),
+        color = "black"
+      ),
+      # goal curves
+      ggforce::geom_arc(
+        data =
+          tibble::tibble(
+            x = c(-net_curve_center_x, net_curve_center_x),
+            y = -net_curve_center_y,
+            r = net_radius,
+            start =
+              c(
+                pi,
+                acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) +
+                  atan(net_post_x_diff / net_curve_center_y)
+              ),
+            end =
+              c(
+                (2*pi) -
+                  acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) -
+                  atan(net_post_x_diff / net_curve_center_y),
+                pi
+              )
+          ),
+        mapping = ggplot2::aes(x0 = x, y0 = y, r = r, start = start, end = end),
+        color = "black"
+      ),
+      # red lines
       ggplot2::geom_segment(
         data =
           tibble::tibble(
@@ -200,95 +366,11 @@ off_zone_markings <-
           ),
         color = "#C8102E"
       ),
-      # goal straight lines
-      ggplot2::geom_segment(
-        data =
-          tibble::tibble(
-            x = c(-3, -net_curve_center_x, 3),
-            xend =
-              c(
-                (-net_curve_center_x) -
-                  sqrt(
-                    net_radius**2 -
-                      (
-                        sin(
-                          (pi / 2) -
-                            acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) -
-                            atan(net_post_x_diff / net_curve_center_y)
-                        ) *
-                          net_radius
-                      )**2
-                  ),
-                net_curve_center_x,
-                (net_curve_center_x) +
-                  sqrt(
-                    net_radius**2 -
-                      (
-                        sin(
-                          (pi / 2) -
-                            acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) -
-                            atan(net_post_x_diff / net_curve_center_y)
-                        ) *
-                          net_radius
-                      )**2
-                  )
-              ),
-            y = c(0, -net_depth, 0),
-            yend =
-              c(
-                (-net_curve_center_y) + (
-                  sin(
-                    (pi / 2) -
-                      acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) -
-                      atan(net_post_x_diff / net_curve_center_y)
-                  ) *
-                    net_radius
-                ),
-                -net_depth,
-                (-net_curve_center_y) + (
-                  sin(
-                    (pi / 2) -
-                      acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) -
-                      atan(net_post_x_diff / net_curve_center_y)
-                  ) *
-                    net_radius
-                )
-              )
-          ),
-        mapping = ggplot2::aes(
-          x = x, xend = xend, y = y, yend = yend
-        ),
-        color = "black"
-      ),
-      # goal curves
-      ggforce::geom_arc(
-        data =
-          tibble::tibble(
-            x = c(-net_curve_center_x, net_curve_center_x),
-            y = -net_curve_center_y,
-            r = net_radius,
-            start =
-              c(
-                pi,
-                acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) +
-                  atan(net_post_x_diff / net_curve_center_y)
-              ),
-            end =
-              c(
-                (2*pi) -
-                  acos(net_radius / sqrt(net_curve_center_y**2 + net_post_x_diff**2)) -
-                  atan(net_post_x_diff / net_curve_center_y),
-                pi
-              )
-          ),
-        mapping = ggplot2::aes(x0 = x, y0 = y, r = r, start = start, end = end),
-        color = "black"
-      ),
       # rink straight borders
       ggplot2::geom_segment(
         data =
           tibble::tibble(
-            y = c(89, 89, -11),
+            y = c(89.5, 89.5, -11),
             yend = c(17, 17, -11),
             x = c(-42.5, 42.5, -14.5),
             xend = c(-42.5, 42.5, 14.5)
@@ -314,12 +396,8 @@ off_zone_markings <-
         linewidth = 1
       ),
       ggplot2::coord_fixed(
-        ylim =
-          c(
-            ifelse(show_behind_net, -11, 0),
-            ifelse(show_neutral_zone, 89, 64)
-          ),
-        xlim = c(-42.5, 42.5),
+        xlim = xlims,
+        ylim = ylims,
         expand = F
       ),
       ggplot2::theme_minimal(),
