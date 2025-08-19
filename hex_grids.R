@@ -547,22 +547,54 @@ coord_map_lookup_table |>
         method = "2.5 ft Radius, Horizontal Alignment")
   ) |>
   dplyr::mutate(method = method |> factor() |> forcats::fct_inorder()) |>
+  dplyr::filter(
+    !(
+      y < 17 &
+        x < -14.5 &
+        sqrt(
+          (17 - (y - 0.5)) ** 2 + (-14.5 - (x - 0.5)) ** 2
+        ) > 28
+    ),
+    !(
+      y < 17 &
+        x > 14.5 &
+        sqrt(
+          (17 - (y - 0.5)) ** 2 + (14.5 - (x + 0.5)) ** 2
+        ) > 28
+    )
+  ) |>
   ggplot2::ggplot() +
   ggplot2::facet_wrap(
     ggplot2::vars(method),
     ncol = 3
   ) +
-  off_zone_markings(show_behind_net = T, show_neutral_zone = T, big_net = T) +
+  off_zone_markings(show_behind_net = T, show_neutral_zone = T, big_net = F) +
   ggplot2::geom_tile(ggplot2::aes(x = x, y = y, fill = hex_id), alpha = 0.7) +
-  ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
+  # ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
   ggplot2::scale_fill_viridis_c()
 
 
 
 coord_map_lookup_table |>
-  tidyr::unnest(nearest_cell_3_5_vertical) |>
+  tidyr::unnest(nearest_cell_3_vertical) |>
+  dplyr::filter(
+    !(
+      y < 17 &
+        x < -14.5 &
+        sqrt(
+          (17 - (y - 0.5)) ** 2 + (-14.5 - (x - 0.5)) ** 2
+        ) > 28
+    ),
+    !(
+      y < 17 &
+        x > 14.5 &
+        sqrt(
+          (17 - (y - 0.5)) ** 2 + (14.5 - (x + 0.5)) ** 2
+        ) > 28
+    )
+  ) |>
   ggplot2::ggplot() +
-  off_zone_markings() +
+  off_zone_markings(show_behind_net = T, show_neutral_zone = T, direction = "down") +
   ggplot2::geom_tile(ggplot2::aes(x = x, y = y, fill = hex_id), alpha = 0.7) +
   ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
   ggplot2::scale_fill_viridis_c()
