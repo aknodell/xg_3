@@ -47,9 +47,8 @@ hex_grid_3_5_vertical <-
     shooting_target_perc =
       (horiz_angle / pi) *
       (vert_angle / (pi / 2)),
+    hex_id = dplyr::dense_rank(radius)
   ) |>
-  dplyr::arrange(radius, x) |>
-  tibble::rowid_to_column(var = "hex_id") |>
   dplyr::select(
     hex_id,
     x_hex = x,
@@ -98,9 +97,8 @@ hex_grid_3_5_horizontal <-
     shooting_target_perc =
       (horiz_angle / pi) *
       (vert_angle / (pi / 2)),
+    hex_id = dplyr::dense_rank(radius)
   ) |>
-  dplyr::arrange(radius, x) |>
-  tibble::rowid_to_column(var = "hex_id") |>
   dplyr::select(
     hex_id,
     x_hex = x,
@@ -152,9 +150,8 @@ hex_grid_3_vertical <-
     shooting_target_perc =
       (horiz_angle / pi) *
       (vert_angle / (pi / 2)),
+    hex_id = dplyr::dense_rank(radius)
   ) |>
-  dplyr::arrange(radius, x) |>
-  tibble::rowid_to_column(var = "hex_id") |>
   dplyr::select(
     hex_id,
     x_hex = x,
@@ -204,9 +201,8 @@ hex_grid_3_horizontal <-
     shooting_target_perc =
       (horiz_angle / pi) *
       (vert_angle / (pi / 2)),
+    hex_id = dplyr::dense_rank(radius)
   ) |>
-  dplyr::arrange(radius, x) |>
-  tibble::rowid_to_column(var = "hex_id") |>
   dplyr::select(
     hex_id,
     x_hex = x,
@@ -257,9 +253,8 @@ hex_grid_2_5_vertical <-
     shooting_target_perc =
       (horiz_angle / pi) *
       (vert_angle / (pi / 2)),
+    hex_id = dplyr::dense_rank(radius)
   ) |>
-  dplyr::arrange(radius, x) |>
-  tibble::rowid_to_column(var = "hex_id") |>
   dplyr::select(
     hex_id,
     x_hex = x,
@@ -308,9 +303,8 @@ hex_grid_2_5_horizontal <-
     shooting_target_perc =
       (horiz_angle / pi) *
       (vert_angle / (pi / 2)),
+    hex_id = dplyr::dense_rank(radius)
   ) |>
-  dplyr::arrange(radius, x) |>
-  tibble::rowid_to_column(var = "hex_id") |>
   dplyr::select(
     hex_id,
     x_hex = x,
@@ -506,72 +500,86 @@ coord_map_lookup_table <-
   )
 
 coord_map_lookup_table |>
-  tidyr::unnest(nearest_cell_3_5_vertical) |>
+  tidyr::unnest(nearest_cell_2_5_horizontal) |>
   dplyr::mutate(
     hex_id = hex_id / max(hex_id),
-    method = "3.5 ft Radius, Vertical Alignment"
-  ) |>
-  dplyr::bind_rows(
-    coord_map_lookup_table |>
-      tidyr::unnest(nearest_cell_3_vertical) |>
-      dplyr::mutate(
-        hex_id = hex_id / max(hex_id),
-        method = "3 ft Radius, Vertical Alignment")
-  ) |>
-  dplyr::bind_rows(
-    coord_map_lookup_table |>
-      tidyr::unnest(nearest_cell_2_5_vertical) |>
-      dplyr::mutate(
-        hex_id = hex_id / max(hex_id),
-        method = "2.5 ft Radius, Vertical Alignment")
-  ) |>
-  dplyr::bind_rows(
-    coord_map_lookup_table |>
-      tidyr::unnest(nearest_cell_3_5_horizontal) |>
-      dplyr::mutate(
-        hex_id = hex_id / max(hex_id),
-        method = "3.5 ft Radius, Horizontal Alignment")
+    method = "2.5 ft Radius, Horizontal Alignment"
   ) |>
   dplyr::bind_rows(
     coord_map_lookup_table |>
       tidyr::unnest(nearest_cell_3_horizontal) |>
       dplyr::mutate(
         hex_id = hex_id / max(hex_id),
-        method = "3 ft Radius, Horizontal Alignment")
+        method = "3 ft Radius, Horizontal Alignment"
+      )
   ) |>
   dplyr::bind_rows(
     coord_map_lookup_table |>
-      tidyr::unnest(nearest_cell_2_5_horizontal) |>
+      tidyr::unnest(nearest_cell_3_5_horizontal) |>
       dplyr::mutate(
         hex_id = hex_id / max(hex_id),
-        method = "2.5 ft Radius, Horizontal Alignment")
+        method = "3.5 ft Radius, Horizontal Alignment"
+      )
   ) |>
+  dplyr::bind_rows(
+    coord_map_lookup_table |>
+      tidyr::unnest(nearest_cell_2_5_vertical) |>
+      dplyr::mutate(
+        hex_id = hex_id / max(hex_id),
+        method = "2.5 ft Radius, Vertical Alignment"
+      )
+  ) |>
+  dplyr::bind_rows(
+    coord_map_lookup_table |>
+      tidyr::unnest(nearest_cell_3_vertical) |>
+      dplyr::mutate(
+        hex_id = hex_id / max(hex_id),
+        method = "3 ft Radius, Vertical Alignment"
+      )
+  ) |>
+  dplyr::bind_rows(
+    coord_map_lookup_table |>
+      tidyr::unnest(nearest_cell_3_5_vertical) |>
+      dplyr::mutate(
+        hex_id = hex_id / max(hex_id),
+        method = "3.5 ft Radius, Vertical Alignment"
+      )
+    ) |>
   dplyr::mutate(method = method |> factor() |> forcats::fct_inorder()) |>
-  dplyr::filter(
-    !(
-      y < 17 &
-        x < -14.5 &
-        sqrt(
-          (17 - (y - 0.5)) ** 2 + (-14.5 - (x - 0.5)) ** 2
-        ) > 28
-    ),
-    !(
-      y < 17 &
-        x > 14.5 &
-        sqrt(
-          (17 - (y - 0.5)) ** 2 + (14.5 - (x + 0.5)) ** 2
-        ) > 28
-    )
-  ) |>
+  # dplyr::filter(
+  #   !(
+  #     y < 17 &
+  #       x < -14.5 &
+  #       sqrt(
+  #         (17 - (y - 0.5)) ** 2 + (-14.5 - (x - 0.5)) ** 2
+  #       ) > 28
+  #   ),
+  #   !(
+  #     y < 17 &
+  #       x > 14.5 &
+  #       sqrt(
+  #         (17 - (y - 0.5)) ** 2 + (14.5 - (x + 0.5)) ** 2
+  #       ) > 28
+  #   )
+  # ) |>
   ggplot2::ggplot() +
-  ggplot2::facet_wrap(
-    ggplot2::vars(method),
-    ncol = 3
-  ) +
+  ggplot2::facet_wrap(ggplot2::vars(method), ncol = 3) +
   off_zone_markings(show_behind_net = T, show_neutral_zone = T, big_net = F) +
   ggplot2::geom_tile(ggplot2::aes(x = x, y = y, fill = hex_id), alpha = 0.7) +
-  # ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
+  ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex, color = hex_id), size = 3) + #, color = "white") +
+  ggplot2::scale_color_viridis_c() +
   ggplot2::scale_fill_viridis_c()
+
+coord_map_lookup_table |>
+  tidyr::unnest(nearest_cell_2_5_horizontal) |>
+  ggplot2::ggplot() +
+  off_zone_markings(show_behind_net = T, show_neutral_zone = T, big_net = F) +
+  ggplot2::geom_tile(ggplot2::aes(x = x, y = y, fill = hex_id), alpha = 0.7) +
+  ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex, color = hex_id), size = 3) + #, color = "white") +
+  ggplot2::scale_color_viridis_c() +
+  ggplot2::scale_fill_viridis_c()
+
+
 
 
 
@@ -595,8 +603,8 @@ coord_map_lookup_table |>
   ) |>
   ggplot2::ggplot() +
   off_zone_markings(show_behind_net = T, show_neutral_zone = T, direction = "down") +
-  ggplot2::geom_tile(ggplot2::aes(x = x, y = y, fill = hex_id), alpha = 0.7) +
-  ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
+  ggplot2::geom_tile(ggplot2::aes(x = x, y = y-0.5, fill = hex_id), alpha = 0.7) +
+  ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex-0.5), size = 3, color = "white") +
   ggplot2::scale_fill_viridis_c()
 
 coord_map_lookup_table |>
@@ -631,12 +639,5 @@ coord_map_lookup_table |>
   ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
   ggplot2::scale_fill_viridis_c()
 
-coord_map_lookup_table |>
-  tidyr::unnest(nearest_cell_2_5_horizontal) |>
-  ggplot2::ggplot() +
-  off_zone_markings() +
-  ggplot2::geom_tile(ggplot2::aes(x = x, y = y, fill = hex_id), alpha = 0.7) +
-  ggplot2::geom_point(ggplot2::aes(x = x_hex, y = y_hex), size = 3, color = "white") +
-  ggplot2::scale_fill_viridis_c()
 
 
