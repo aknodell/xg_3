@@ -32,7 +32,7 @@ training_data <-
       tibble::rowid_to_column(var = "game_num")
   )
 
-dynamic_xg_test <-
+dynamic_xg <-
   nhl_db_con |>
   odbc::dbGetQuery(
     "select game_id gm_id, game_date gm_dt from games where season >= 20212022 and session = 2"
@@ -43,13 +43,18 @@ dynamic_xg_test <-
   dplyr::filter(game_num > 1312) |>
   dplyr::group_by(gm_dt) |>
   dplyr::summarise(min = min(game_num)) |>
-  head() |>
+  # head(2) |>
   dplyr::mutate(
     shot_data_5v5 =
       purrr::map2(
         gm_dt,
         min,
         function(dt, m) {
+          print(
+            "{dt} start" |>
+              glue::glue()
+          )
+
           training_data |>
             dplyr::filter(
               shot_y > 0,
@@ -75,9 +80,15 @@ dynamic_xg_test <-
         }
       ),
     shot_blocker_data_5v5_basic =
-      purrr::map(
+      purrr::map2(
+        gm_dt,
         shot_data_5v5,
-        function(df_5v5) {
+        function(dt, df_5v5) {
+          print(
+            "{dt} density" |>
+              glue::glue()
+          )
+
           att_density <-
             df_5v5 |>
             dplyr::group_by(
@@ -104,6 +115,7 @@ dynamic_xg_test <-
                     ) |>
                       purrr::pluck("z") |>
                       tibble::as_tibble(.name_repair = "unique") |>
+                      suppressMessages() |>
                       dplyr::mutate(shot_x = seq(-42, 42)) |>
                       tidyr::pivot_longer(-c(shot_x), names_to = "shot_y", values_to = "fen_z") |>
                       dplyr::mutate(shot_y = shot_y |> stringr::str_extract("\\d+") |> as.integer()) |>
@@ -126,9 +138,11 @@ dynamic_xg_test <-
                         ) |>
                           purrr::pluck("z") |>
                           tibble::as_tibble(.name_repair = "unique") |>
+                          suppressMessages() |>
                           dplyr::mutate(shot_x = seq(-42, 42)) |>
                           tidyr::pivot_longer(-c(shot_x), names_to = "shot_y", values_to = "block_z") |>
-                          dplyr::mutate(shot_y = shot_y |> stringr::str_extract("\\d+") |> as.integer())
+                          dplyr::mutate(shot_y = shot_y |> stringr::str_extract("\\d+") |> as.integer()),
+                        by = c("shot_x", "shot_y")
                       ) |>
                       dplyr::mutate(
                         fen_z = fen_z / sum(fen_z),
@@ -264,7 +278,7 @@ dynamic_xg_test <-
                     slope_right_post <- y_adj / (x_adj - (3 + angle_adj))
                     intercept_right_post <- (slope_right_post * (-3 - angle_adj))
 
-                    shot_att_density_est_5v5 |>
+                    att_density |>
                       dplyr::filter(
                         # shot_type == type,
                         # point_shot == point,
@@ -339,9 +353,16 @@ dynamic_xg_test <-
         }
       ),
     xg_5v5_basic =
-      purrr::map(
+      purrr::map2(
+        gm_dt,
         shot_data_5v5,
-        function(shots) {
+        function(dt, shots) {
+          print(
+            "{dt} model" |>
+              glue::glue()
+          )
+
+
           shots <-
             shots |>
             dplyr::filter(event_type != "BLOCK") |>
