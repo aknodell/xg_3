@@ -661,6 +661,7 @@ training_data |>
   dplyr::group_by(gm_dt = game_date) |>
   tidyr::nest() |>
   dplyr::inner_join(dynamic_xg) |>
+  dplyr::left_join(shot_blocker_density_ests) |>
   # head() |>
   dplyr::mutate(
     data =
@@ -1496,7 +1497,7 @@ training_data |>
   dplyr::select(data) |>
   tidyr::unnest(data) |>
   dplyr::ungroup() |>
-  dplyr::group_by(season) |>
+  # dplyr::group_by(season) |>
   dplyr::summarise(
     gp = game_id |> unique() |> length(),
     g = sum(event_type == "GOAL"),
@@ -2492,9 +2493,9 @@ training_data |>
         }
       )
   ) |>
+  dplyr::ungroup() |>
   dplyr::select(data) |>
   tidyr::unnest(data) |>
-  dplyr::ungroup() |>
   # dplyr::group_by(season) |>
   dplyr::summarise(
     gp = game_id |> unique() |> length(),
@@ -2995,10 +2996,10 @@ training_data |>
         }
       )
   ) |>
+  dplyr::ungroup() |>
   dplyr::select(data) |>
   tidyr::unnest(data) |>
-  dplyr::ungroup() |>
-  dplyr::group_by(season) |>
+  # dplyr::group_by(season) |>
   dplyr::summarise(
     gp = game_id |> unique() |> length(),
     g = sum(event_type == "GOAL"),
@@ -3591,10 +3592,10 @@ training_data |>
         }
       )
   ) |>
+  dplyr::ungroup() |>
   dplyr::select(data) |>
   tidyr::unnest(data) |>
-  dplyr::ungroup() |>
-  dplyr::group_by(season) |>
+  # dplyr::group_by(season) |>
   dplyr::summarise(
     gp = game_id |> unique() |> length(),
     g = sum(event_type == "GOAL"),
@@ -3929,9 +3930,9 @@ training_data |>
         }
       )
   ) |>
+  dplyr::ungroup() |>
   dplyr::select(data) |>
   tidyr::unnest(data) |>
-  dplyr::ungroup() |>
   # dplyr::group_by(season) |>
   dplyr::summarise(
     gp = game_id |> unique() |> length(),
@@ -4306,10 +4307,10 @@ training_data |>
         }
       )
   ) |>
+  dplyr::ungroup() |>
   dplyr::select(data) |>
   tidyr::unnest(data) |>
-  dplyr::ungroup() |>
-  dplyr::group_by(season) |>
+  # dplyr::group_by(season) |>
   dplyr::summarise(
     gp = game_id |> unique() |> length(),
     g = sum(event_type == "GOAL"),
