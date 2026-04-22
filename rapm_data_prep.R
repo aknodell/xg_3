@@ -82,10 +82,12 @@ players <-
         glue::glue() |>
         readr::read_csv(
           col_select = c(
-            game_id:game_seconds, event_type, event_length,
+            game_id:game_seconds, event_team_strength, event_team, event_type,
             tidyr::starts_with("home_on_"), tidyr::starts_with("away_on_"),
-            event_team ,home_team, away_team, home_team_def_zone,
-            event_id, event_team_zone, coords_x, coords_y,
+            home_team, away_team, home_team_def_zone,
+            event_id,
+            # event_team_zone,
+            coords_x, coords_y,
             home_skater_strength_state, shift_id
           ),
           col_types = readr::cols(
@@ -94,7 +96,7 @@ players <-
             home_team = readr::col_character(),
             away_team = readr::col_character(),
             home_team_def_zone = readr::col_character(),
-            event_team_zone = readr::col_character(),
+            # event_team_zone = readr::col_character(),
             home_skater_strength_state = readr::col_character(),
             event_team_strength = readr::col_character(),
             .default = readr::col_integer()
@@ -113,16 +115,265 @@ players <-
           period_standardized_y = coords_y * ifelse(home_team_def_zone == "left", 1, -1)
         )
 
-      tibble::tibble(
+      home_tm <- pbp$home_team |> unique() |> purrr::discard(is.na)
+      away_tm <- pbp$away_team |> unique() |> purrr::discard(is.na)
 
-      )
+      corsi_events <-
+        training_data |>
+        dplyr::filter(
+          as.integer(f) == game_id &
+            event_team_strength == "EV" &
+            home_skater_strength_state == "5v5"
+        ) |>
+        dplyr::transmute(
+          game_id, game_seconds, fac_id, shift_id, event_team,
+          c = 1,
+          in_zone = shot_zone == "O",
+          above_goal_line = in_zone & shot_y > 0
+        )
+
+      seconds <-
+        tibble::tibble(
+          game_id = as.integer(f),
+          game_period = 1,
+          game_seconds = 0:1200
+        ) |>
+        dplyr::bind_rows(
+          tibble::tibble(
+            game_id = as.integer(f),
+            game_period = 2,
+            game_seconds = 1200:2400
+          )
+        ) |>
+        dplyr::bind_rows(
+          tibble::tibble(
+            game_id = as.integer(f),
+            game_period = 3,
+            game_seconds = 2400:3600
+          )
+        ) |>
+        dplyr::bind_rows(
+          if (max(pbp$game_seconds) > 3600) {
+            tibble::tibble(
+              game_id = as.integer(f),
+              game_period == 4,
+              game_seconds = seq(3600, max(pbp$game_seconds))
+            )
+          } else {
+            tibble::tibble()
+          }
+        )
+
+      fac_shadow <-
+        seconds |>
+        dplyr::left_join(
+          pbp |>
+            dplyr::filter(event_type %in% c("FAC"), fac_id != 0) |>
+            dplyr::transmute(
+              game_seconds, game_period, fac_id, event_id, event_type,
+              home_fac_zone =
+                dplyr::case_when(
+                  period_standardized_x == -69 ~ "D",
+                  period_standardized_x == -20 ~ "ND",
+                  period_standardized_x == 0 ~ "NN",
+                  period_standardized_x == 20 ~ "NO",
+                  period_standardized_x == 69 ~ "O",
+                ),
+              home_fac_win = as.integer(event_team == home_team)
+            )
+        ) |>
+        tidyr::fill(
+          c(game_period, fac_id, home_fac_zone, home_fac_win),
+          .direction = "down"
+        ) |>
+        dplyr::group_by(game_period) |>
+        dplyr::group_by(fac_id) |>
+        dplyr::mutate(
+          fac_shadow = as.integer(game_seconds - min(game_seconds) <= 8)
+        ) |>
+        dplyr::select(-c(event_id, event_type)) |>
+        dplyr::ungroup()
+
+      pen_shadow <-
+        seconds |>
+        dplyr::left_join(
+          pbp |>
+            dplyr::filter(event_type %in% c("CHANGE", "FAC"), fac_id != 0) |>
+            dplyr::select(
+              game_seconds, game_period, fac_id,
+              event_id, event_type,
+              home_skater_strength_state
+            )
+        ) |>
+        tidyr::fill(
+          c(game_period, fac_id,
+            home_skater_strength_state),
+          .direction = "down"
+        ) |>
+        dplyr::left_join(
+          pbp |>
+            dplyr::filter(event_type != "PENL", fac_id != 0) |>
+            dplyr::group_by(fac_id) |>
+            dplyr::summarise(
+              has_pp_event = any(event_team_strength %in% c("PP", "SH")) |> as.integer(),
+              home_team_pp =
+                any(
+                  (event_type %in% c("GOAL", "SHOT", "MISS", "HIT", "GIVE", "TAKE", "FAC") &
+                     event_team == home_team &
+                     event_team_strength == "PP") |
+                    (event_type %in% c("BLOCK") &
+                       event_team == home_team &
+                       event_team_strength == "SH") |
+                    (event_type %in% c("GOAL", "SHOT", "MISS", "HIT", "GIVE", "TAKE", "FAC") &
+                       event_team == away_team &
+                       event_team_strength == "SH") |
+                    (event_type %in% c("BLOCK") &
+                       event_team == home_team &
+                       event_team_strength == "PP")
+                ) |>
+                as.integer()
+            )
+        ) |>
+        dplyr::group_by(game_period, game_seconds) |>
+        dplyr::mutate(
+          otf_change =
+            tidyr::replace_na("CHANGE" %in% event_type & !"FAC" %in% event_type, F) |> as.integer()
+        ) |>
+        dplyr::ungroup() |>
+        dplyr::group_by(game_period) |>
+        dplyr::mutate(
+          penalty_exp =
+            tidyr::replace_na(
+              (
+                otf_change == 1 &
+                  home_skater_strength_state == "5v5" &
+                  has_pp_event == 1
+              ),
+              F
+            ) |>
+            as.integer()
+        ) |>
+        dplyr::group_by(fac_id) |>
+        dplyr::mutate(
+          penalty_exp = as.integer(penalty_exp == cumsum(penalty_exp) & penalty_exp != 0),
+          pentalty_exp_time = ifelse(penalty_exp == 1, game_seconds, -10),
+          penalty_exp_shadow =
+            as.integer(
+              game_seconds - max(pentalty_exp_time) <= 8 &
+                game_seconds - max(pentalty_exp_time) >= 0
+            )
+        ) |>
+        dplyr::select(
+          -c(
+            event_id, event_type, home_skater_strength_state, otf_change,
+            penalty_exp, pentalty_exp_time
+          )
+        ) |>
+        dplyr::ungroup() |>
+        dplyr::distinct()
+
+      home_shift_shadows <-
+        seconds |>
+        dplyr::left_join(
+          pbp |>
+            dplyr::filter(fac_id != 0) |>
+            dplyr::select(
+              game_id, game_period, fac_id, shift_id, game_seconds, home_skater_strength_state,
+              tidyselect::starts_with("home_on_"), tidyselect::starts_with("away_on_")
+            ) |>
+            dplyr::distinct() |>
+            tidyr::pivot_longer(
+              c(tidyselect::starts_with("home_on_"), tidyselect::starts_with("away_on_"))
+            ) |>
+            dplyr::filter(!is.na(value)) |>
+            dplyr::mutate(on = 1) |>
+            dplyr::mutate(
+              value = "{value}_shadow_{ifelse(stringr::str_detect(name, 'home'), 'off', 'def')}" |>
+                glue::glue()
+            ) |>
+            tidyr::pivot_wider(
+              id_cols = game_id:home_skater_strength_state,
+              names_from = value,
+              values_from = on,
+              values_fill = 0
+            )
+        ) |>
+        tidyr::fill(tidyselect::everything(), .direction = "down") |>
+        tidyr::pivot_longer(
+          cols = -c(game_id:home_skater_strength_state)
+        ) |>
+        dplyr::arrange(game_period, game_seconds, fac_id, shift_id) |>
+        dplyr::group_by(name, fac_id) |>
+        dplyr::mutate(
+          last_time_on_ice = cummax(game_seconds * value * (home_skater_strength_state == "5v5")),
+          shadow =
+            (value == 0) *
+            (game_seconds - last_time_on_ice > 0 & game_seconds - last_time_on_ice <= 8) *
+            (home_skater_strength_state == "5v5") *
+            (last_time_on_ice != 0)
+        ) |>
+        tidyr::pivot_wider(
+          id_cols = game_id:home_skater_strength_state,
+          names_from = name,
+          values_from = shadow,
+          values_fill = 0
+        ) |>
+        dplyr::ungroup() |>
+        print()
+
+      away_shift_shadows <-
+        seconds |>
+        dplyr::left_join(
+          pbp |>
+            dplyr::filter(fac_id != 0) |>
+            dplyr::select(
+              game_id, game_period, fac_id, shift_id, game_seconds, home_skater_strength_state,
+              tidyselect::starts_with("home_on_"), tidyselect::starts_with("away_on_")
+            ) |>
+            dplyr::distinct() |>
+            tidyr::pivot_longer(
+              c(tidyselect::starts_with("home_on_"), tidyselect::starts_with("away_on_"))
+            ) |>
+            dplyr::filter(!is.na(value)) |>
+            dplyr::mutate(on = 1) |>
+            dplyr::mutate(
+              value = "{value}_shadow_{ifelse(stringr::str_detect(name, 'away'), 'off', 'def')}" |>
+                glue::glue()
+            ) |>
+            tidyr::pivot_wider(
+              id_cols = game_id:home_skater_strength_state,
+              names_from = value,
+              values_from = on,
+              values_fill = 0
+            )
+        ) |>
+        tidyr::fill(tidyselect::everything(), .direction = "down") |>
+        tidyr::pivot_longer(
+          cols = -c(game_id:home_skater_strength_state)
+        ) |>
+        dplyr::arrange(game_period, game_seconds, fac_id, shift_id) |>
+        dplyr::group_by(name, fac_id) |>
+        dplyr::mutate(
+          last_time_on_ice = cummax(game_seconds * value * (home_skater_strength_state == "5v5")),
+          shadow =
+            (value == 0) *
+            (game_seconds - last_time_on_ice > 0 & game_seconds - last_time_on_ice <= 8) *
+            (home_skater_strength_state == "5v5") *
+            (last_time_on_ice != 0)
+        ) |>
+        tidyr::pivot_wider(
+          id_cols = game_id:home_skater_strength_state,
+          names_from = name,
+          values_from = shadow,
+          values_fill = 0
+        ) |>
+        dplyr::ungroup()
 
       player_bio_factors <-
         pbp |>
         dplyr::filter(home_skater_strength_state == "5v5") |>
         dplyr::group_by(game_id, home_team, away_team, fac_id, shift_id, home_score_diff) |>
         dplyr::summarise(
-          # shift_length = sum(event_length),
           dplyr::across(
             c(tidyr::starts_with("home_on_"), tidyr::starts_with("away_on_")),
             .fns = function(x) unique(x)
@@ -184,15 +435,14 @@ players <-
             )
         ) |>
         dplyr::select(-c(name:handedness)) |>
-        dplyr::distinct() |>
-        print()
+        dplyr::ungroup() |>
+        dplyr::distinct()
 
       players_on <-
         pbp |>
         dplyr::filter(home_skater_strength_state == "5v5") |>
         dplyr::group_by(game_id, home_team, away_team, fac_id, shift_id) |>
         dplyr::summarise(
-          # shift_length = sum(event_length),
           dplyr::across(
             c(tidyr::starts_with("home_on_"), tidyr::starts_with("away_on_")),
             .fns = function(x) unique(x)
@@ -221,31 +471,219 @@ players <-
           values_from = val,
           values_fill = 0
         ) |>
-        print()
+        dplyr::ungroup()
 
       schedule_factors |>
-        tidyr::unnest(
-          schedule_fcts
+        tidyr::unnest(schedule_fcts) |>
+        dplyr::filter(game_id == as.integer(f), team == home_tm) |>
+        dplyr::transmute(
+          game_id,
+          team_off = team,
+          matinee,
+          is_home_off = is_home,
+          no_rest_off = as.integer(days_since_last_game == 1),
+          reg_rest_off = as.integer(days_since_last_game == 2),
+          long_rest_off = as.integer(days_since_last_game == 3),
+          rust_off = as.integer(days_since_last_game == 4),
+          travelled_off = travelled,
+          time_zones_changed_off = time_zones_changed,
         ) |>
-        dplyr::inner_join(
+        dplyr::left_join(
+          schedule_factors |>
+            tidyr::unnest(schedule_fcts) |>
+            dplyr::filter(game_id == as.integer(f), team != home_tm) |>
+            dplyr::transmute(
+              game_id,
+              is_home_def = is_home,
+              no_rest_def = as.integer(days_since_last_game == 1),
+              reg_rest_def = as.integer(days_since_last_game == 2),
+              long_rest_def = as.integer(days_since_last_game == 3),
+              rust_def = as.integer(days_since_last_game == 4),
+              travelled_def = travelled,
+              time_zones_changed_def = time_zones_changed,
+            ),
+          by = c("game_id")
+        ) |>
+        dplyr::left_join(
+          pen_shadow |>
+            dplyr::full_join(fac_shadow) |>
+            dplyr::full_join(
+              home_shift_shadows
+            ) |>
+            dplyr::full_join(
+              corsi_events |>
+                dplyr::filter(event_team == home_tm)
+            ) |>
+            dplyr::arrange(
+              fac_id,
+              shift_id,
+              game_seconds
+            ) |>
+            tidyr::fill(
+              c(
+                has_pp_event,
+                home_team_pp,
+                penalty_exp_shadow,
+                home_fac_zone,
+                home_fac_win,
+                fac_shadow
+              ),
+              .direction = "down"
+            ) |>
+            dplyr::mutate(event_length = game_seconds - tidyr::replace_na(dplyr::lag(game_seconds), 0)) |>
+            dplyr::filter(home_skater_strength_state == "5v5") |>
+            dplyr::group_by(
+              game_id,
+              fac_id,
+              shift_id,
+              long_change = as.integer(game_period %% 2 == 0),
+              nn_fac_w_shadow = as.integer(home_fac_zone == "NN" & fac_shadow == 1 & home_fac_win == 1),
+              nn_fac_l_shadow = as.integer(home_fac_zone == "NN" & fac_shadow == 1 & home_fac_win == 0),
+              no_fac_w_shadow = as.integer(home_fac_zone == "NO" & fac_shadow == 1 & home_fac_win == 1),
+              no_fac_l_shadow = as.integer(home_fac_zone == "NO" & fac_shadow == 1 & home_fac_win == 0),
+              nd_fac_w_shadow = as.integer(home_fac_zone == "ND" & fac_shadow == 1 & home_fac_win == 1),
+              nd_fac_l_shadow = as.integer(home_fac_zone == "ND" & fac_shadow == 1 & home_fac_win == 0),
+              o_fac_w_shadow = as.integer(home_fac_zone == "O" & fac_shadow == 1 & home_fac_win == 1),
+              o_fac_l_shadow = as.integer(home_fac_zone == "O" & fac_shadow == 1 & home_fac_win == 0),
+              d_fac_w_shadow = as.integer(home_fac_zone == "D" & fac_shadow == 1 & home_fac_win == 1),
+              d_fac_l_shadow = as.integer(home_fac_zone == "D" & fac_shadow == 1 & home_fac_win == 0),
+              pp_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 1),
+              pk_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 0),
+              dplyr::across(c(tidyselect::ends_with("_off"), tidyselect::ends_with("_def")))
+            ) |>
+            dplyr::summarise(
+              game_seconds = min(game_seconds),
+              shift_length = sum(event_length),
+              corsi = sum(c, na.rm = T),
+              in_zone_corsi = sum(in_zone, na.rm = T),
+              above_goal_line_corsi = sum(above_goal_line, na.rm = T),
+              .groups = "drop"
+            ) |>
+            dplyr::arrange(game_seconds, fac_id, shift_id)
+        ) |>
+        dplyr::left_join(
           player_bio_factors |>
             dplyr::transmute(
-              game_id, team = home_team,
+              game_id,
               fac_id, shift_id,
-              score_diff = home_score_diff,
+              down_3 = as.integer(home_score_diff <= -3),
+              down_2 = as.integer(home_score_diff == -2),
+              down_1 = as.integer(home_score_diff == -1),
+              up_1 = as.integer(home_score_diff == 1),
+              up_2 = as.integer(home_score_diff == 2),
+              up_3 = as.integer(home_score_diff >= 3),
               skater_type_off = home_team_skater_type,
               skater_type_def = away_team_skater_type,
               d_balanced_off = home_d_balanced,
               d_balanced_def = away_d_balanced,
               f_balanced_off = home_d_balanced,
               f_balanced_def = away_d_balanced
+            )
+        ) |>
+        dplyr::left_join(
+          players_on |>
+            dplyr::filter(team == home_tm)
+        ) |>
+        dplyr::bind_rows(
+          schedule_factors |>
+            tidyr::unnest(schedule_fcts) |>
+            dplyr::filter(game_id == as.integer(f), team == away_tm) |>
+            dplyr::transmute(
+              game_id,
+              team_off = team,
+              matinee,
+              is_home_off = is_home,
+              no_rest_off = as.integer(days_since_last_game == 1),
+              reg_rest_off = as.integer(days_since_last_game == 2),
+              long_rest_off = as.integer(days_since_last_game == 3),
+              rust_off = as.integer(days_since_last_game == 4),
+              travelled_off = travelled,
+              time_zones_changed_off = time_zones_changed,
             ) |>
-            dplyr::bind_rows(
+            dplyr::left_join(
+              schedule_factors |>
+                tidyr::unnest(schedule_fcts) |>
+                dplyr::filter(game_id == as.integer(f), team != away_tm) |>
+                dplyr::transmute(
+                  game_id,
+                  is_home_def = is_home,
+                  no_rest_def = as.integer(days_since_last_game == 1),
+                  reg_rest_def = as.integer(days_since_last_game == 2),
+                  long_rest_def = as.integer(days_since_last_game == 3),
+                  rust_def = as.integer(days_since_last_game == 4),
+                  travelled_def = travelled,
+                  time_zones_changed_def = time_zones_changed,
+                ),
+              by = c("game_id")
+            ) |>
+            dplyr::left_join(
+              pen_shadow |>
+                dplyr::full_join(fac_shadow) |>
+                dplyr::full_join(
+                  away_shift_shadows
+                ) |>
+                dplyr::full_join(
+                  corsi_events |>
+                    dplyr::filter(event_team == away_tm)
+                ) |>
+                dplyr::arrange(
+                  fac_id,
+                  shift_id,
+                  game_seconds
+                ) |>
+                tidyr::fill(
+                  c(
+                    has_pp_event,
+                    home_team_pp,
+                    penalty_exp_shadow,
+                    home_fac_zone,
+                    home_fac_win,
+                    fac_shadow
+                  ),
+                  .direction = "down"
+                ) |>
+                dplyr::mutate(event_length = game_seconds - tidyr::replace_na(dplyr::lag(game_seconds), 0)) |>
+                dplyr::filter(home_skater_strength_state == "5v5") |>
+                dplyr::group_by(
+                  game_id,
+                  fac_id,
+                  shift_id,
+                  long_change = as.integer(game_period %% 2 == 0),
+                  nn_fac_w_shadow = as.integer(home_fac_zone == "NN" & fac_shadow == 1 & home_fac_win == 0),
+                  nn_fac_l_shadow = as.integer(home_fac_zone == "NN" & fac_shadow == 1 & home_fac_win == 1),
+                  no_fac_w_shadow = as.integer(home_fac_zone == "ND" & fac_shadow == 1 & home_fac_win == 0),
+                  no_fac_l_shadow = as.integer(home_fac_zone == "ND" & fac_shadow == 1 & home_fac_win == 1),
+                  nd_fac_w_shadow = as.integer(home_fac_zone == "NO" & fac_shadow == 1 & home_fac_win == 0),
+                  nd_fac_l_shadow = as.integer(home_fac_zone == "NO" & fac_shadow == 1 & home_fac_win == 1),
+                  o_fac_w_shadow = as.integer(home_fac_zone == "D" & fac_shadow == 1 & home_fac_win == 0),
+                  o_fac_l_shadow = as.integer(home_fac_zone == "D" & fac_shadow == 1 & home_fac_win == 1),
+                  d_fac_w_shadow = as.integer(home_fac_zone == "O" & fac_shadow == 1 & home_fac_win == 0),
+                  d_fac_l_shadow = as.integer(home_fac_zone == "O" & fac_shadow == 1 & home_fac_win == 1),
+                  pp_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 0),
+                  pk_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 1),
+                  dplyr::across(c(tidyselect::ends_with("_off"), tidyselect::ends_with("_def")))
+                ) |>
+                dplyr::summarise(
+                  game_seconds = min(game_seconds),
+                  shift_length = sum(event_length),
+                  corsi = sum(c, na.rm = T),
+                  in_zone_corsi = sum(in_zone, na.rm = T),
+                  above_goal_line_corsi = sum(above_goal_line, na.rm = T),
+                  .groups = "drop"
+                ) |>
+                dplyr::arrange(game_seconds, fac_id, shift_id)
+            ) |>
+            dplyr::left_join(
               player_bio_factors |>
                 dplyr::transmute(
-                  game_id, team = away_team,
+                  game_id,
                   fac_id, shift_id,
-                  score_diff = home_score_diff * -1,
+                  down_3 = as.integer(home_score_diff >= 3),
+                  down_2 = as.integer(home_score_diff == 2),
+                  down_1 = as.integer(home_score_diff == 1),
+                  up_1 = as.integer(home_score_diff == -1),
+                  up_2 = as.integer(home_score_diff == -2),
+                  up_3 = as.integer(home_score_diff <= -3),
                   skater_type_off = away_team_skater_type,
                   skater_type_def = home_team_skater_type,
                   d_balanced_off = away_d_balanced,
@@ -253,12 +691,23 @@ players <-
                   f_balanced_off = away_d_balanced,
                   f_balanced_def = home_d_balanced
                 )
-            ),
-          by = c("game_id", "team")
+            ) |>
+            dplyr::left_join(
+              players_on |>
+                dplyr::filter(team == away_tm)
+            )
         ) |>
-        dplyr::left_join(players_on)
+        dplyr::filter(
+          !(shift_length == 0 & corsi == 0)
+        ) |>
+        dplyr::mutate(
+          dplyr::across(
+            c(tidyselect::ends_with("shadow_off"), tidyselect::ends_with("shadow_def")),
+            function(x) tidyr::replace_na(0)
+          )
+        )
     }
-  ) |>
+  )
   dplyr::bind_rows() |>
   View()
 
@@ -327,7 +776,8 @@ test_pbp |>
 
 
 
-test_fac_shadow <-
+
+test_game_seconds <-
   tibble::tibble(
     game_period = 1,
     game_seconds = 0:1200
@@ -353,10 +803,13 @@ test_fac_shadow <-
     } else {
       tibble::tibble()
     }
-  ) |>
+  )
+
+test_fac_shadow <-
+  test_game_seconds |>
   dplyr::left_join(
     test_pbp |>
-      dplyr::filter(event_type %in% c("FAC")) |>
+      dplyr::filter(event_type %in% c("FAC"), fac_id != 0) |>
       dplyr::transmute(
         game_seconds, game_period, fac_id, event_id, event_type,
         home_fac_zone =
@@ -383,54 +836,28 @@ test_fac_shadow <-
   ) |>
   dplyr::select(-c(event_id, event_type)) |>
   dplyr::ungroup()
-  View()
-
-
-
-
 
 test_pen_shadow <-
-  tibble::tibble(
-    game_period = 1,
-    game_seconds = 0:1200
-  ) |>
-  dplyr::bind_rows(
-    tibble::tibble(
-      game_period = 2,
-      game_seconds = 1200:2400
-    )
-  ) |>
-  dplyr::bind_rows(
-    tibble::tibble(
-      game_period = 3,
-      game_seconds = 2400:3600
-    )
-  ) |>
-  dplyr::bind_rows(
-    if (max(test_pbp$game_seconds) > 3600) {
-      tibble::tibble(
-        game_period == 4,
-        game_seconds = seq(3600, max(test_pbp$game_seconds))
-      )
-    } else {
-      tibble::tibble()
-    }
-  ) |>
+  test_game_seconds |>
   dplyr::left_join(
     test_pbp |>
-      dplyr::filter(event_type %in% c("CHANGE", "FAC")) |>
+      dplyr::filter(event_type %in% c("CHANGE", "FAC"), fac_id != 0) |>
       dplyr::select(
-        game_seconds, game_period, fac_id, shift_id, event_id, event_type,
+        game_seconds, game_period, fac_id,
+        # shift_id,
+        event_id, event_type,
         home_skater_strength_state
       )
   ) |>
   tidyr::fill(
-    c(game_period, fac_id, shift_id, home_skater_strength_state),
+    c(game_period, fac_id,
+      # shift_id,
+      home_skater_strength_state),
     .direction = "down"
   ) |>
   dplyr::left_join(
     test_pbp |>
-      dplyr::filter(event_type != "PENL") |>
+      dplyr::filter(event_type != "PENL", fac_id != 0) |>
       dplyr::group_by(fac_id) |>
       dplyr::summarise(
         has_pp_event = any(event_team_strength %in% c("PP", "SH")) |> as.integer(),
@@ -487,15 +914,151 @@ test_pen_shadow <-
       penalty_exp, pentalty_exp_time
     )
   ) |>
-  dplyr::ungroup()
-  # dplyr::distinct()
+  dplyr::ungroup() |>
+  dplyr::distinct()
   # View()
+
+#
+# test_pen_shadow |>
+#   dplyr::full_join(test_fac_shadow) |>
+#   dplyr::full_join(
+#     test_pbp |>
+#       dplyr::select(
+#         game_period,
+#         game_seconds,
+#         fac_id,
+#         shift_id,
+#         event_id,
+#         event_type,
+#         event_team,
+#         home_team
+#       )
+#   ) |>
+#   dplyr::arrange(
+#     fac_id,
+#     shift_id,
+#     game_seconds
+#   ) |>
+#   tidyr::fill(
+#     c(
+#       has_pp_event,
+#       home_team_pp,
+#       penalty_exp_shadow,
+#       home_fac_zone,
+#       home_fac_win,
+#       fac_shadow
+#     ),
+#     .direction = "down"
+#   ) |>
+#   dplyr::mutate(event_length = game_seconds - tidyr::replace_na(dplyr::lag(game_seconds), 0)) |>
+#   dplyr::group_by(
+#     fac_id,
+#     shift_id,
+#     has_pp_event,
+#     home_team_pp,
+#     penalty_exp_shadow,
+#     home_fac_zone,
+#     home_fac_win,
+#     fac_shadow
+#   ) |>
+#   dplyr::summarise(
+#     game_seconds = min(game_seconds),
+#     shift_length = sum(event_length),
+#     home_corsi =
+#       sum(event_type %in% c("GOAL", "SHOT", "MISS", "BLOCK") & event_team == home_team, na.rm = T),
+#     away_corsi =
+#       sum(event_type %in% c("GOAL", "SHOT", "MISS", "BLOCK") & event_team != home_team, na.rm = T)
+#   ) |>
+#   dplyr::filter(
+#     !(shift_length == 0 & home_corsi == 0 & away_corsi == 0)
+#   ) |>
+#   dplyr::arrange(game_seconds, fac_id, shift_id) |>
+#   dplyr::mutate(
+#     nn_fac_shadow = as.integer(home_fac_zone == "NN" & fac_shadow == 1),
+#     no_fac_shadow = as.integer(home_fac_zone == "NO" & fac_shadow == 1),
+#     nd_fac_shadow = as.integer(home_fac_zone == "ND" & fac_shadow == 1),
+#     o_fac_shadow = as.integer(home_fac_zone == "O" & fac_shadow == 1),
+#     d_fac_shadow = as.integer(home_fac_zone == "D" & fac_shadow == 1),
+#     pp_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 1),
+#     pk_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 0)
+#   ) |>
+#   View("fac_and_pen_shadows")
+
+
+
+
+test_shift_shadows <-
+  test_game_seconds |>
+  dplyr::left_join(
+    test_pbp |>
+      dplyr::filter(fac_id != 0) |>
+      dplyr::select(
+        game_period, fac_id, shift_id, game_seconds, home_skater_strength_state,
+        tidyselect::starts_with("home_on_"), tidyselect::starts_with("away_on_")
+      ) |>
+      dplyr::distinct() |>
+      # dplyr::summarise(
+      #   dplyr::across(
+      #     c(game_seconds, tidyselect::starts_with("home_on_"), tidyselect::starts_with("away_on_")),
+      #     min
+      #   )
+      # ) |>
+      tidyr::pivot_longer(
+        c(tidyselect::starts_with("home_on_"), tidyselect::starts_with("away_on_"))
+      ) |>
+      dplyr::filter(!is.na(value)) |>
+      dplyr::mutate(on = 1) |>
+      dplyr::mutate(
+        value = "{value}_shadow_{ifelse(stringr::str_detect(name, 'home'), 'off', 'def')}" |>
+          glue::glue()
+      ) |>
+      # dplyr::filter(value == 8474563)
+      tidyr::pivot_wider(
+        id_cols = game_period:home_skater_strength_state,
+        names_from = value,
+        values_from = on,
+        values_fill = 0
+      )
+  ) |>
+  tidyr::fill(tidyselect::everything(), .direction = "down") |>
+  tidyr::pivot_longer(
+    cols = -c(game_period:home_skater_strength_state)
+  ) |>
+  dplyr::arrange(game_period, game_seconds, fac_id, shift_id) |>
+  # dplyr::filter(name == "8482124") |>
+  dplyr::group_by(name, fac_id) |>
+  dplyr::mutate(
+    last_time_on_ice = cummax(game_seconds * value * (home_skater_strength_state == "5v5")),
+    shadow =
+      (value == 0) *
+      (game_seconds - last_time_on_ice > 0 & game_seconds - last_time_on_ice <= 8) *
+      (home_skater_strength_state == "5v5") *
+      (last_time_on_ice != 0)
+  ) |>
+  tidyr::pivot_wider(
+    id_cols = game_period:home_skater_strength_state,
+    names_from = name,
+    values_from = shadow,
+    values_fill = 0
+  ) |>
+  dplyr::ungroup()
+
+
+
+
 
 
 test_pen_shadow |>
   dplyr::full_join(test_fac_shadow) |>
   dplyr::full_join(
+    test_shift_shadows
+  ) |>
+  dplyr::full_join(
     test_pbp |>
+      dplyr::filter(
+        fac_id != 0,
+        event_type %in% c("GOAL", "SHOT", "MISS", "BLOCK")
+      ) |>
       dplyr::select(
         game_period,
         game_seconds,
@@ -524,21 +1087,62 @@ test_pen_shadow |>
     .direction = "down"
   ) |>
   dplyr::mutate(event_length = game_seconds - tidyr::replace_na(dplyr::lag(game_seconds), 0)) |>
+  # colnames()
   dplyr::group_by(
     fac_id,
     shift_id,
-    has_pp_event,
-    home_team_pp,
-    penalty_exp_shadow,
-    home_fac_zone,
-    home_fac_win,
-    fac_shadow
+    long_change = as.integer(game_period %% 2 == 0),
+    nn_fac_w_shadow = as.integer(home_fac_zone == "NN" & fac_shadow == 1 & home_fac_win == 1),
+    nn_fac_l_shadow = as.integer(home_fac_zone == "NN" & fac_shadow == 1 & home_fac_win == 0),
+    no_fac_w_shadow = as.integer(home_fac_zone == "NO" & fac_shadow == 1 & home_fac_win == 1),
+    no_fac_l_shadow = as.integer(home_fac_zone == "NO" & fac_shadow == 1 & home_fac_win == 0),
+    nd_fac_w_shadow = as.integer(home_fac_zone == "ND" & fac_shadow == 1 & home_fac_win == 1),
+    nd_fac_l_shadow = as.integer(home_fac_zone == "ND" & fac_shadow == 1 & home_fac_win == 0),
+    o_fac_w_shadow = as.integer(home_fac_zone == "O" & fac_shadow == 1 & home_fac_win == 1),
+    o_fac_l_shadow = as.integer(home_fac_zone == "O" & fac_shadow == 1 & home_fac_win == 0),
+    d_fac_w_shadow = as.integer(home_fac_zone == "D" & fac_shadow == 1 & home_fac_win == 1),
+    d_fac_l_shadow = as.integer(home_fac_zone == "D" & fac_shadow == 1 & home_fac_win == 0),
+    pp_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 1),
+    pk_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 0),
+    dplyr::across(c(tidyselect::ends_with("_off"), tidyselect::ends_with("_def")))
   ) |>
   dplyr::summarise(
+    game_seconds = min(game_seconds),
     shift_length = sum(event_length),
-    home_corsi = sum(event_type %in% c("GOAL", "SHOT", "MISS", "BLOCK") & event_team == home_team, na.rm = T),
-    away_corsi = sum(event_type %in% c("GOAL", "SHOT", "MISS", "BLOCK") & event_team != home_team, na.rm = T)
+    corsi =
+      sum(
+        event_type %in% c("GOAL", "SHOT", "MISS", "BLOCK") &
+          event_team == home_team, na.rm = T
+      ),
+    .groups = "drop"
   ) |>
-  View()
+  dplyr::filter(
+    !(shift_length == 0 & corsi == 0)
+  ) |>
+  dplyr::arrange(game_seconds, fac_id, shift_id)
+  # dplyr::filter(
+  #   nn_fac_w_shadow == 1 |
+  #     nn_fac_w_shadow == 1 |
+  #   no_fac_w_shadow == 1 |
+  #     no_fac_w_shadow == 1 |
+  #   nd_fac_w_shadow == 1 |
+  #     nd_fac_w_shadow == 1 |
+  #   o_fac_w_shadow == 1 |
+  #     o_fac_w_shadow == 1 |
+  #   d_fac_w_shadow == 1 |
+  #     d_fac_w_shadow == 1
+  # ) |>
+  # View()
+  dplyr::mutate(
+    nn_fac_shadow = as.integer(home_fac_zone == "NN" & fac_shadow == 1),
+    no_fac_shadow = as.integer(home_fac_zone == "NO" & fac_shadow == 1),
+    nd_fac_shadow = as.integer(home_fac_zone == "ND" & fac_shadow == 1),
+    o_fac_shadow = as.integer(home_fac_zone == "O" & fac_shadow == 1),
+    d_fac_shadow = as.integer(home_fac_zone == "D" & fac_shadow == 1),
+    pp_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 1),
+    pk_exp_shadow = as.integer(penalty_exp_shadow == 1 & home_team_pp == 0)
+  )
+
+
 
 
