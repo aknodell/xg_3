@@ -126,6 +126,17 @@ schedule_factors <-
       purrr::map(season, get_schedule_factors)
   )
 
+schedule_factors <-
+  schedule_factors |>
+  tidyr::unnest(schedule_fcts) |>
+  dplyr::filter(days_since_last_game != 0) |>
+  dplyr::group_by(season) |>
+  tidyr::nest()
+
+schedule_factors <-
+  schedule_factors |>
+  dplyr::ungroup()
+
 schedule_factors |>
   tidyr::unnest(schedule_fcts) |>
   # dplyr::filter(is_home == 0, travelled == 0) |>
