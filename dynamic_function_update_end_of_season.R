@@ -1857,166 +1857,9 @@ dynamic_xg <-
       tidyr::unnest(shot_data_5v5)
   )
 
-
-training_data |>
-  dplyr::filter(
-    shot_y > 0,
-    shot_zone == "O",
-    position_category != "G",
-    event_team_strength == "EV",
-    home_skater_strength_state %in% c("5v5"),
-    event_type != "BLOCK"
-  ) |>
-  dplyr::group_by(gm_dt = game_date) |>
-  tidyr::nest() |>
-  dplyr::inner_join(dynamic_xg) |>
-  dplyr::left_join(shot_blocker_density_ests) |>
-  dplyr::mutate(
-    data =
-      purrr::pmap(
-        list(
-          d = data,
-          b = shot_blocker_data_5v5_basic,
-          x = xg_5v5_basic,
-          xu = xg_5v5_basic_un_weight,
-          xg = xg_5v5_basic_game_weight,
-          xp = xg_5v5_basic_player_weight,
-          xt = xg_5v5_basic_total_weight
-        ),
-        function(d, b, x, xu, xg, xp, xt) {
-          d <-
-            d |>
-            dplyr::inner_join(
-              b,
-              by = c("shot_x", "shot_y")
-            )
-
-          m <-
-            d |>
-            dplyr::mutate(
-              shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
-              shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
-              dist_center = sqrt(shot_x**2 + shot_y**2),
-              dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
-              dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
-              angle_near_post = atan((abs(shot_x) - 3) / shot_y),
-              angle_far_post = atan((abs(shot_x) + 3) / shot_y),
-              h_angle = abs(angle_near_post - angle_far_post),
-              l_adj = cos(h_angle / 2) * dist_near_post,
-              width = 2 * sqrt(dist_near_post**2 - l_adj**2),
-              height_far_post = 4 * (dist_near_post / dist_far_post),
-              target_area = width * ((height_far_post + 4) / 2)
-            ) |>
-            dplyr::select(-c(dist_near_post:height_far_post)) |>
-            dplyr::ungroup() |>
-            dplyr::transmute(
-              is_goal = as.integer(event_type == "GOAL"),
-              dist_center,
-              dist_center_2 = dist_center**2,
-              dist_center_3 = dist_center**3,
-              target_area,
-              blocker_dens
-            )
-
-          d |>
-            dplyr::transmute(
-              # season,
-              game_id,
-              event_id,
-              # xg_basic =
-              #   predict(
-              #     x,
-              #     model.matrix(
-              #       is_goal ~
-              #         (
-              #           (
-              #             dist_center +
-              #               dist_center_2 +
-              #               dist_center_3
-              #           ) * target_area
-              #         ) +
-              #         blocker_dens,
-              #       m
-              #     )[, -1],
-              #     type = "response"
-              #   ) |>
-              #   as.double(),
-              xg_unweighted =
-                predict(
-                  xu,
-                  model.matrix(
-                    is_goal ~
-                      (
-                        (
-                          dist_center +
-                            dist_center_2 +
-                            dist_center_3
-                        ) * target_area
-                      ),
-                    m
-                  )[, -1],
-                  type = "response"
-                ) |>
-                as.double(),
-              xg_game_weight =
-                predict(
-                  xg,
-                  model.matrix(
-                    is_goal ~
-                      (
-                        (
-                          dist_center +
-                            dist_center_2 +
-                            dist_center_3
-                        ) * target_area
-                      ),
-                    m
-                  )[, -1],
-                  type = "response"
-                ) |>
-                as.double(),
-              xg_player_weight =
-                predict(
-                  xp,
-                  model.matrix(
-                    is_goal ~
-                      (
-                        (
-                          dist_center +
-                            dist_center_2 +
-                            dist_center_3
-                        ) * target_area
-                      ),
-                    m
-                  )[, -1],
-                  type = "response"
-                ) |>
-                as.double(),
-              xg_total_weight =
-                predict(
-                  xt,
-                  model.matrix(
-                    is_goal ~
-                      (
-                        (
-                          dist_center +
-                            dist_center_2 +
-                            dist_center_3
-                        ) * target_area
-                      ),
-                    m
-                  )[, -1],
-                  type = "response"
-                ) |>
-                as.double()
-            )
-        }
-      )
-  ) |>
-  dplyr::ungroup() |>
-  dplyr::select(data) |>
-  tidyr::unnest(data) |>
-  dplyr::full_join(
+training_data <-
+  training_data |>
+  dplyr::left_join(
     training_data |>
       dplyr::filter(
         shot_y > 0,
@@ -2029,278 +1872,25 @@ training_data |>
       dplyr::group_by(gm_dt = game_date) |>
       tidyr::nest() |>
       dplyr::inner_join(dynamic_xg) |>
-      dplyr::mutate(
-        data =
-          purrr::pmap(
-            list(
-              d = data,
-              x = xg_5v5_shot_type_game_weight
-            ),
-            function(d, x) {
-              m <-
-                d |>
-                dplyr::mutate(
-                  shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
-                  shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
-                  dist_center = sqrt(shot_x**2 + shot_y**2),
-                  dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
-                  dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
-                  angle_near_post = atan((abs(shot_x) - 3) / shot_y),
-                  angle_far_post = atan((abs(shot_x) + 3) / shot_y),
-                  h_angle = abs(angle_near_post - angle_far_post),
-                  l_adj = cos(h_angle / 2) * dist_near_post,
-                  width = 2 * sqrt(dist_near_post**2 - l_adj**2),
-                  height_far_post = 4 * (dist_near_post / dist_far_post),
-                  target_area = width * ((height_far_post + 4) / 2)
-                ) |>
-                dplyr::select(-c(dist_near_post:height_far_post)) |>
-                dplyr::ungroup() |>
-                dplyr::transmute(
-                  is_goal = as.integer(event_type == "GOAL"),
-                  dist_center,
-                  dist_center_2 = dist_center**2,
-                  dist_center_3 = dist_center**3,
-                  target_area,
-                  is_slap = as.integer(shot_type == "Slap"),
-                  is_tip = as.integer(shot_type == "Tip In/Deflection"),
-                  is_other = as.integer(shot_type == "Backhand/Other")
-                )
-
-              d |>
-                dplyr::transmute(
-                  game_id,
-                  event_id,
-                  xg_shot_type =
-                    predict(
-                      x,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other,
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double()
-                )
-            }
-          )
-      ) |>
-      dplyr::select(data) |>
-      tidyr::unnest(data) |>
-      dplyr::ungroup(),
-    by = c("game_id", "event_id")
-  ) |>
-  dplyr::full_join(
-    training_data |>
-      dplyr::filter(
-        shot_y > 0,
-        shot_zone == "O",
-        position_category != "G",
-        event_team_strength == "EV",
-        home_skater_strength_state %in% c("5v5"),
-        event_type != "BLOCK"
-      ) |>
-      dplyr::group_by(gm_dt = game_date) |>
-      tidyr::nest() |>
-      dplyr::inner_join(dynamic_xg) |>
-      dplyr::mutate(
-        data =
-          purrr::pmap(
-            list(
-              d = data,
-              x_br = xg_5v5_rush_basic,
-              x_rs = xg_5v5_rush_secs,
-              x_rv = xg_5v5_rush_velo,
-              x_rvs = xg_5v5_rush_secs_velo
-            ),
-            function(d, b, x_br, x_rs, x_rv, x_rvs) {
-              m <-
-                d |>
-                dplyr::mutate(
-                  shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
-                  shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
-                  dist_center = sqrt(shot_x**2 + shot_y**2),
-                  dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
-                  dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
-                  angle_near_post = atan((abs(shot_x) - 3) / shot_y),
-                  angle_far_post = atan((abs(shot_x) + 3) / shot_y),
-                  h_angle = abs(angle_near_post - angle_far_post),
-                  l_adj = cos(h_angle / 2) * dist_near_post,
-                  width = 2 * sqrt(dist_near_post**2 - l_adj**2),
-                  height_far_post = 4 * (dist_near_post / dist_far_post),
-                  target_area = width * ((height_far_post + 4) / 2)
-                ) |>
-                dplyr::select(-c(dist_near_post:height_far_post)) |>
-                dplyr::ungroup() |>
-                dplyr::transmute(
-                  is_goal = as.integer(event_type == "GOAL"),
-                  dist_center,
-                  dist_center_2 = dist_center**2,
-                  dist_center_3 = dist_center**3,
-                  target_area,
-                  is_slap = as.integer(shot_type == "Slap"),
-                  is_tip = as.integer(shot_type == "Tip In/Deflection"),
-                  is_other = as.integer(shot_type == "Backhand/Other"),
-                  is_rush,
-                  rush_secs,
-                  rush_velo = ifelse(rush_velo > 70, 70, rush_velo)
-                )
-
-              d |>
-                dplyr::transmute(
-                  game_id,
-                  event_id,
-                  xg_rush =
-                    predict(
-                      x_br,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          is_rush,
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_rush_secs =
-                    predict(
-                      x_rs,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_secs),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_rush_velo =
-                    predict(
-                      x_rv,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_rush_velo_secs =
-                    predict(
-                      x_rvs,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_secs * rush_velo),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double()
-                )
-            }
-          )
-      ) |>
-      dplyr::ungroup() |>
-      dplyr::select(data) |>
-      tidyr::unnest(data),
-    by = c("game_id", "event_id")
-  ) |>
-  dplyr::full_join(
-    training_data |>
-      dplyr::filter(
-        shot_y > 0,
-        shot_zone == "O",
-        position_category != "G",
-        event_team_strength == "EV",
-        home_skater_strength_state %in% c("5v5"),
-        event_type != "BLOCK"
-      ) |>
-      dplyr::group_by(gm_dt = game_date) |>
-      tidyr::nest() |>
-      dplyr::inner_join(dynamic_xg) |>
-      dplyr::inner_join(shot_blocker_density_ests) |>
+      dplyr::left_join(shot_blocker_density_ests) |>
       dplyr::mutate(
         data =
           purrr::pmap(
             list(
               d = data,
               b = shot_blocker_data_5v5_basic,
-              st = shot_blocker_data_5v5_shot_type,
-              stp = shot_blocker_data_5v5_shot_type_point,
-              xb = xg_5v5_rush_velo_blocker_basic,
-              xst = xg_5v5_rush_velo_blocker_shot_type,
-              xstp = xg_5v5_rush_velo_blocker_shot_type_point
+              x = xg_5v5_basic,
+              xu = xg_5v5_basic_un_weight,
+              xg = xg_5v5_basic_game_weight,
+              xp = xg_5v5_basic_player_weight,
+              xt = xg_5v5_basic_total_weight
             ),
-            function(d, b, st, stp, xb, xst, xstp) {
+            function(d, b, x, xu, xg, xp, xt) {
               d <-
                 d |>
                 dplyr::inner_join(
-                  b |>
-                    dplyr::transmute(
-                      shot_x, shot_y, block_dens_basic = blocker_dens
-                    ),
+                  b,
                   by = c("shot_x", "shot_y")
-                ) |>
-                dplyr::inner_join(
-                  st |>
-                    dplyr::transmute(
-                      shot_x, shot_y, shot_type, block_dens_shot_type = blocker_dens
-                    ),
-                  by = c("shot_x", "shot_y", "shot_type")
-                ) |>
-                dplyr::inner_join(
-                  stp |>
-                    dplyr::transmute(
-                      shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
-                    ),
-                  by = c("shot_x", "shot_y", "shot_type", "point_shot")
                 )
 
               m <-
@@ -2327,30 +1917,35 @@ training_data |>
                   dist_center_2 = dist_center**2,
                   dist_center_3 = dist_center**3,
                   target_area,
-                  is_slap = as.integer(shot_type == "Slap"),
-                  is_tip = as.integer(shot_type == "Tip In/Deflection"),
-                  is_other = as.integer(shot_type == "Backhand/Other"),
-                  is_rush,
-                  # rush_secs,
-                  rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
-                  block_dens_basic,
-                  block_dens_shot_type,
-                  block_dens_shot_type_point
-                ) |>
-                dplyr::filter(
-                  !is.na(is_goal) &
-                    !is.na(dist_center) &
-                    !is.na(target_area) &
-                    !is.na(block_dens_basic)
+                  blocker_dens
                 )
 
               d |>
                 dplyr::transmute(
+                  # season,
                   game_id,
                   event_id,
-                  xg_blockers_basic =
+                  # xg_basic =
+                  #   predict(
+                  #     x,
+                  #     model.matrix(
+                  #       is_goal ~
+                  #         (
+                  #           (
+                  #             dist_center +
+                  #               dist_center_2 +
+                  #               dist_center_3
+                  #           ) * target_area
+                  #         ) +
+                  #         blocker_dens,
+                  #       m
+                  #     )[, -1],
+                  #     type = "response"
+                  #   ) |>
+                  #   as.double(),
+                  xg_unweighted =
                     predict(
-                      xb,
+                      xu,
                       model.matrix(
                         is_goal ~
                           (
@@ -2359,20 +1954,15 @@ training_data |>
                                 dist_center_2 +
                                 dist_center_3
                             ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_basic,
+                          ),
                         m
                       )[, -1],
                       type = "response"
                     ) |>
                     as.double(),
-                  xg_blockers_shot_type =
+                  xg_game_weight =
                     predict(
-                      xst,
+                      xg,
                       model.matrix(
                         is_goal ~
                           (
@@ -2381,20 +1971,15 @@ training_data |>
                                 dist_center_2 +
                                 dist_center_3
                             ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type,
+                          ),
                         m
                       )[, -1],
                       type = "response"
                     ) |>
                     as.double(),
-                  xg_blockers_shot_type_point =
+                  xg_player_weight =
                     predict(
-                      xstp,
+                      xp,
                       model.matrix(
                         is_goal ~
                           (
@@ -2403,12 +1988,24 @@ training_data |>
                                 dist_center_2 +
                                 dist_center_3
                             ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point,
+                          ),
+                        m
+                      )[, -1],
+                      type = "response"
+                    ) |>
+                    as.double(),
+                  xg_total_weight =
+                    predict(
+                      xt,
+                      model.matrix(
+                        is_goal ~
+                          (
+                            (
+                              dist_center +
+                                dist_center_2 +
+                                dist_center_3
+                            ) * target_area
+                          ),
                         m
                       )[, -1],
                       type = "response"
@@ -2420,661 +2017,1078 @@ training_data |>
       ) |>
       dplyr::ungroup() |>
       dplyr::select(data) |>
-      tidyr::unnest(data),
-    by = c("game_id", "event_id")
-  ) |>
-  dplyr::full_join(
-    training_data |>
-      dplyr::filter(
-        shot_y > 0,
-        shot_zone == "O",
-        position_category != "G",
-        event_team_strength == "EV",
-        home_skater_strength_state %in% c("5v5"),
-        event_type != "BLOCK"
-      ) |>
-      dplyr::group_by(gm_dt = game_date) |>
-      tidyr::nest() |>
-      dplyr::inner_join(dynamic_xg) |>
-      dplyr::inner_join(shot_blocker_density_ests) |>
-      dplyr::mutate(
-        data =
-          purrr::pmap(
-            list(
-              d = data,
-              stp = shot_blocker_data_5v5_shot_type_point,
-              xf = xg_5v5_rush_velo_blocker_basic_fac,
-              xfw = xg_5v5_rush_velo_blocker_basic_fac_win,
-              xfs = xg_5v5_rush_velo_blocker_basic_fac_secs,
-              xfws = xg_5v5_rush_velo_blocker_basic_fac_win_secs
-            ),
-            function(d,stp, xf, xfw, xfs, xfws) {
-              d <-
-                d |>
-                dplyr::inner_join(
-                  stp |>
+      tidyr::unnest(data) |>
+      dplyr::full_join(
+        training_data |>
+          dplyr::filter(
+            shot_y > 0,
+            shot_zone == "O",
+            position_category != "G",
+            event_team_strength == "EV",
+            home_skater_strength_state %in% c("5v5"),
+            event_type != "BLOCK"
+          ) |>
+          dplyr::group_by(gm_dt = game_date) |>
+          tidyr::nest() |>
+          dplyr::inner_join(dynamic_xg) |>
+          dplyr::mutate(
+            data =
+              purrr::pmap(
+                list(
+                  d = data,
+                  x = xg_5v5_shot_type_game_weight
+                ),
+                function(d, x) {
+                  m <-
+                    d |>
+                    dplyr::mutate(
+                      shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
+                      shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
+                      dist_center = sqrt(shot_x**2 + shot_y**2),
+                      dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
+                      dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
+                      angle_near_post = atan((abs(shot_x) - 3) / shot_y),
+                      angle_far_post = atan((abs(shot_x) + 3) / shot_y),
+                      h_angle = abs(angle_near_post - angle_far_post),
+                      l_adj = cos(h_angle / 2) * dist_near_post,
+                      width = 2 * sqrt(dist_near_post**2 - l_adj**2),
+                      height_far_post = 4 * (dist_near_post / dist_far_post),
+                      target_area = width * ((height_far_post + 4) / 2)
+                    ) |>
+                    dplyr::select(-c(dist_near_post:height_far_post)) |>
+                    dplyr::ungroup() |>
                     dplyr::transmute(
-                      shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
-                    ),
-                  by = c("shot_x", "shot_y", "shot_type", "point_shot")
-                )
+                      is_goal = as.integer(event_type == "GOAL"),
+                      dist_center,
+                      dist_center_2 = dist_center**2,
+                      dist_center_3 = dist_center**3,
+                      target_area,
+                      is_slap = as.integer(shot_type == "Slap"),
+                      is_tip = as.integer(shot_type == "Tip In/Deflection"),
+                      is_other = as.integer(shot_type == "Backhand/Other")
+                    )
 
-              m <-
-                d |>
-                dplyr::mutate(
-                  shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
-                  shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
-                  dist_center = sqrt(shot_x**2 + shot_y**2),
-                  dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
-                  dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
-                  angle_near_post = atan((abs(shot_x) - 3) / shot_y),
-                  angle_far_post = atan((abs(shot_x) + 3) / shot_y),
-                  h_angle = abs(angle_near_post - angle_far_post),
-                  l_adj = cos(h_angle / 2) * dist_near_post,
-                  width = 2 * sqrt(dist_near_post**2 - l_adj**2),
-                  height_far_post = 4 * (dist_near_post / dist_far_post),
-                  target_area = width * ((height_far_post + 4) / 2)
-                ) |>
-                dplyr::select(-c(dist_near_post:height_far_post)) |>
-                dplyr::ungroup() |>
-                dplyr::transmute(
-                  is_goal = as.integer(event_type == "GOAL"),
-                  dist_center,
-                  dist_center_2 = dist_center**2,
-                  dist_center_3 = dist_center**3,
-                  target_area,
-                  is_slap = as.integer(shot_type == "Slap"),
-                  is_tip = as.integer(shot_type == "Tip In/Deflection"),
-                  is_other = as.integer(shot_type == "Backhand/Other"),
-                  is_rush,
-                  # rush_secs,
-                  rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
-                  block_dens_shot_type_point,
-                  is_off_faceoff,
-                  is_off_faceoff_win,
-                  faceoff_secs
-                ) |>
-                dplyr::filter(
-                  !is.na(is_goal) &
-                    !is.na(dist_center) &
-                    !is.na(target_area) &
-                    !is.na(block_dens_shot_type_point)
-                )
-
-              d |>
-                dplyr::transmute(
-                  game_id,
-                  event_id,
-                  xg_fac =
-                    predict(
-                      xf,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          is_off_faceoff,
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_fac_win =
-                    predict(
-                      xfw,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          (is_off_faceoff + is_off_faceoff_win),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_fac_secs =
-                    predict(
-                      xfs,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          (is_off_faceoff * faceoff_secs),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_fac_win_secs =
-                    predict(
-                      xfws,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double()
-                )
-            }
-          )
-      ) |>
-      dplyr::ungroup() |>
-      dplyr::select(data) |>
-      tidyr::unnest(data),
-    by = c("game_id", "event_id")
-  ) |>
-  dplyr::full_join(
-    training_data |>
-      dplyr::filter(
-        shot_y > 0,
-        shot_zone == "O",
-        position_category != "G",
-        event_team_strength == "EV",
-        home_skater_strength_state %in% c("5v5"),
-        event_type != "BLOCK"
-      ) |>
-      dplyr::group_by(gm_dt = game_date) |>
-      tidyr::nest() |>
-      dplyr::inner_join(dynamic_xg) |>
-      dplyr::inner_join(shot_blocker_density_ests) |>
-      dplyr::mutate(
-        data =
-          purrr::pmap(
-            list(
-              d = data,
-              stp = shot_blocker_data_5v5_shot_type_point,
-              xf = xg_5v5_rush_velo_blocker_basic_fac_win_secs_follow,
-              xof = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_follow,
-              xrf = xg_5v5_rush_velo_blocker_basic_fac_win_secs_reach_follow,
-              xorf = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow,
-              xorfi = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow_int
-            ),
-            function(d,stp, xf, xof, xrf, xorf, xorfi) {
-              d <-
-                d |>
-                dplyr::inner_join(
-                  stp |>
+                  d |>
                     dplyr::transmute(
-                      shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
-                    ),
-                  by = c("shot_x", "shot_y", "shot_type", "point_shot")
-                )
-
-              m <-
-                d |>
-                dplyr::mutate(
-                  shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
-                  shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
-                  dist_center = sqrt(shot_x**2 + shot_y**2),
-                  dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
-                  dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
-                  angle_near_post = atan((abs(shot_x) - 3) / shot_y),
-                  angle_far_post = atan((abs(shot_x) + 3) / shot_y),
-                  h_angle = abs(angle_near_post - angle_far_post),
-                  l_adj = cos(h_angle / 2) * dist_near_post,
-                  width = 2 * sqrt(dist_near_post**2 - l_adj**2),
-                  height_far_post = 4 * (dist_near_post / dist_far_post),
-                  target_area = width * ((height_far_post + 4) / 2)
-                ) |>
-                dplyr::select(-c(dist_near_post:height_far_post)) |>
-                dplyr::ungroup() |>
-                dplyr::transmute(
-                  is_goal = as.integer(event_type == "GOAL"),
-                  dist_center,
-                  dist_center_2 = dist_center**2,
-                  dist_center_3 = dist_center**3,
-                  target_area,
-                  is_slap = as.integer(shot_type == "Slap"),
-                  is_tip = as.integer(shot_type == "Tip In/Deflection"),
-                  is_other = as.integer(shot_type == "Backhand/Other"),
-                  is_rush,
-                  # rush_secs,
-                  rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
-                  block_dens_shot_type_point,
-                  is_off_faceoff,
-                  is_off_faceoff_win,
-                  faceoff_secs,
-                  is_followup_shot,
-                  is_reached_goalie_followup,
-                  is_own_followup
-                ) |>
-                dplyr::filter(
-                  !is.na(is_goal) &
-                    !is.na(dist_center) &
-                    !is.na(target_area) &
-                    !is.na(block_dens_shot_type_point)
-                )
-
-              d |>
-                dplyr::transmute(
-                  game_id,
-                  event_id,
-                  xg_follow =
-                    predict(
-                      xf,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
-                          is_followup_shot,
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_own_follow =
-                    predict(
-                      xof,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
-                          (is_followup_shot + is_own_followup),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_reach_follow =
-                    predict(
-                      xrf,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
-                          is_reached_goalie_followup,
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_own_reach_follow =
-                    predict(
-                      xorf,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
-                          (is_reached_goalie_followup + is_own_followup),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_own_reach_follow_int =
-                    predict(
-                      xorfi,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
-                          ((is_followup_shot + is_reached_goalie_followup) * is_own_followup),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double()
-                )
-            }
-          )
+                      game_id,
+                      event_id,
+                      xg_shot_type =
+                        predict(
+                          x,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double()
+                    )
+                }
+              )
+          ) |>
+          dplyr::select(data) |>
+          tidyr::unnest(data) |>
+          dplyr::ungroup(),
+        by = c("game_id", "event_id")
       ) |>
-      dplyr::ungroup() |>
-      dplyr::select(data) |>
-      tidyr::unnest(data),
-    by = c("game_id", "event_id")
-  ) |>
-  dplyr::full_join(
-    training_data |>
-      dplyr::filter(
-        shot_y > 0,
-        shot_zone == "O",
-        position_category != "G",
-        event_team_strength == "EV",
-        home_skater_strength_state %in% c("5v5"),
-        event_type != "BLOCK"
-      ) |>
-      dplyr::group_by(gm_dt = game_date) |>
-      tidyr::nest() |>
-      dplyr::inner_join(dynamic_xg) |>
-      dplyr::inner_join(shot_blocker_density_ests) |>
-      dplyr::mutate(
-        data =
-          purrr::pmap(
-            list(
-              d = data,
-              stp = shot_blocker_data_5v5_shot_type_point,
-              xorfa = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow_all
-            ),
-            function(d, stp, xorfa) {
-              d <-
-                d |>
-                dplyr::inner_join(
-                  stp |>
+      dplyr::full_join(
+        training_data |>
+          dplyr::filter(
+            shot_y > 0,
+            shot_zone == "O",
+            position_category != "G",
+            event_team_strength == "EV",
+            home_skater_strength_state %in% c("5v5"),
+            event_type != "BLOCK"
+          ) |>
+          dplyr::group_by(gm_dt = game_date) |>
+          tidyr::nest() |>
+          dplyr::inner_join(dynamic_xg) |>
+          dplyr::mutate(
+            data =
+              purrr::pmap(
+                list(
+                  d = data,
+                  x_br = xg_5v5_rush_basic,
+                  x_rs = xg_5v5_rush_secs,
+                  x_rv = xg_5v5_rush_velo,
+                  x_rvs = xg_5v5_rush_secs_velo
+                ),
+                function(d, b, x_br, x_rs, x_rv, x_rvs) {
+                  m <-
+                    d |>
+                    dplyr::mutate(
+                      shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
+                      shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
+                      dist_center = sqrt(shot_x**2 + shot_y**2),
+                      dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
+                      dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
+                      angle_near_post = atan((abs(shot_x) - 3) / shot_y),
+                      angle_far_post = atan((abs(shot_x) + 3) / shot_y),
+                      h_angle = abs(angle_near_post - angle_far_post),
+                      l_adj = cos(h_angle / 2) * dist_near_post,
+                      width = 2 * sqrt(dist_near_post**2 - l_adj**2),
+                      height_far_post = 4 * (dist_near_post / dist_far_post),
+                      target_area = width * ((height_far_post + 4) / 2)
+                    ) |>
+                    dplyr::select(-c(dist_near_post:height_far_post)) |>
+                    dplyr::ungroup() |>
                     dplyr::transmute(
-                      shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
-                    ),
-                  by = c("shot_x", "shot_y", "shot_type", "point_shot")
-                )
+                      is_goal = as.integer(event_type == "GOAL"),
+                      dist_center,
+                      dist_center_2 = dist_center**2,
+                      dist_center_3 = dist_center**3,
+                      target_area,
+                      is_slap = as.integer(shot_type == "Slap"),
+                      is_tip = as.integer(shot_type == "Tip In/Deflection"),
+                      is_other = as.integer(shot_type == "Backhand/Other"),
+                      is_rush,
+                      rush_secs,
+                      rush_velo = ifelse(rush_velo > 70, 70, rush_velo)
+                    )
 
-              m <-
-                d |>
-                dplyr::mutate(
-                  shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
-                  shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
-                  dist_center = sqrt(shot_x**2 + shot_y**2),
-                  dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
-                  dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
-                  angle_near_post = atan((abs(shot_x) - 3) / shot_y),
-                  angle_far_post = atan((abs(shot_x) + 3) / shot_y),
-                  h_angle = abs(angle_near_post - angle_far_post),
-                  l_adj = cos(h_angle / 2) * dist_near_post,
-                  width = 2 * sqrt(dist_near_post**2 - l_adj**2),
-                  height_far_post = 4 * (dist_near_post / dist_far_post),
-                  target_area = width * ((height_far_post + 4) / 2)
-                ) |>
-                dplyr::select(-c(dist_near_post:height_far_post)) |>
-                dplyr::ungroup() |>
-                dplyr::transmute(
-                  is_goal = as.integer(event_type == "GOAL"),
-                  dist_center,
-                  dist_center_2 = dist_center**2,
-                  dist_center_3 = dist_center**3,
-                  target_area,
-                  is_slap = as.integer(shot_type == "Slap"),
-                  is_tip = as.integer(shot_type == "Tip In/Deflection"),
-                  is_other = as.integer(shot_type == "Backhand/Other"),
-                  is_rush,
-                  # rush_secs,
-                  rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
-                  block_dens_shot_type_point,
-                  is_off_faceoff,
-                  is_off_faceoff_win,
-                  faceoff_secs,
-                  is_followup_shot,
-                  is_reached_goalie_followup,
-                  is_own_followup
-                ) |>
-                dplyr::filter(
-                  !is.na(is_goal) &
-                    !is.na(dist_center) &
-                    !is.na(target_area) &
-                    !is.na(block_dens_shot_type_point)
-                )
-
-              d |>
-                dplyr::transmute(
-                  game_id,
-                  event_id,
-                  xg_own_reach_follow_all =
-                    predict(
-                      xorfa,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
-                          (is_followup_shot + is_reached_goalie_followup + is_own_followup),
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double()
-                )
-            }
-          )
-      ) |>
-      dplyr::ungroup() |>
-      dplyr::select(data) |>
-      tidyr::unnest(data),
-    by = c("game_id", "event_id")
-  ) |>
-  dplyr::full_join(
-    training_data |>
-      dplyr::filter(
-        shot_y > 0,
-        shot_zone == "O",
-        position_category != "G",
-        event_team_strength == "EV",
-        home_skater_strength_state %in% c("5v5"),
-        event_type != "BLOCK"
-      ) |>
-      dplyr::group_by(gm_dt = game_date) |>
-      tidyr::nest() |>
-      dplyr::inner_join(dynamic_xg) |>
-      dplyr::inner_join(shot_blocker_density_ests) |>
-      dplyr::mutate(
-        data =
-          purrr::pmap(
-            list(
-              d = data,
-              stp = shot_blocker_data_5v5_shot_type_point,
-              xs = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow_all_secs,
-              xv = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow_all_velo
-            ),
-            function(d,stp, xs, xv) {
-              d <-
-                d |>
-                dplyr::inner_join(
-                  stp |>
+                  d |>
                     dplyr::transmute(
-                      shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
-                    ),
-                  by = c("shot_x", "shot_y", "shot_type", "point_shot")
-                )
-
-              m <-
-                d |>
-                dplyr::mutate(
-                  shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
-                  shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
-                  dist_center = sqrt(shot_x**2 + shot_y**2),
-                  dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
-                  dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
-                  angle_near_post = atan((abs(shot_x) - 3) / shot_y),
-                  angle_far_post = atan((abs(shot_x) + 3) / shot_y),
-                  h_angle = abs(angle_near_post - angle_far_post),
-                  l_adj = cos(h_angle / 2) * dist_near_post,
-                  width = 2 * sqrt(dist_near_post**2 - l_adj**2),
-                  height_far_post = 4 * (dist_near_post / dist_far_post),
-                  target_area = width * ((height_far_post + 4) / 2)
-                ) |>
-                dplyr::select(-c(dist_near_post:height_far_post)) |>
-                dplyr::ungroup() |>
-                dplyr::transmute(
-                  is_goal = as.integer(event_type == "GOAL"),
-                  dist_center,
-                  dist_center_2 = dist_center**2,
-                  dist_center_3 = dist_center**3,
-                  target_area,
-                  is_slap = as.integer(shot_type == "Slap"),
-                  is_tip = as.integer(shot_type == "Tip In/Deflection"),
-                  is_other = as.integer(shot_type == "Backhand/Other"),
-                  is_rush,
-                  # rush_secs,
-                  rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
-                  block_dens_shot_type_point,
-                  is_off_faceoff,
-                  is_off_faceoff_win,
-                  faceoff_secs,
-                  is_followup_shot,
-                  is_reached_goalie_followup,
-                  is_own_followup,
-                  followup_secs,
-                  angle_change_velo
-                ) |>
-                dplyr::filter(
-                  !is.na(is_goal) &
-                    !is.na(dist_center) &
-                    !is.na(target_area) &
-                    !is.na(block_dens_shot_type_point)
-                )
-
-              d |>
-                dplyr::transmute(
-                  game_id,
-                  event_id,
-                  xg_own_reach_follow_all_secs =
-                    predict(
-                      xs,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
-                          (is_followup_shot + is_reached_goalie_followup + is_own_followup) * followup_secs,
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double(),
-                  xg_own_reach_follow_all_velo =
-                    predict(
-                      xv,
-                      model.matrix(
-                        is_goal ~
-                          (
-                            (
-                              dist_center +
-                                dist_center_2 +
-                                dist_center_3
-                            ) * target_area
-                          ) +
-                          is_slap +
-                          is_tip +
-                          is_other +
-                          (is_rush * rush_velo) +
-                          block_dens_shot_type_point +
-                          ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
-                          (is_followup_shot + is_reached_goalie_followup + is_own_followup) * angle_change_velo,
-                        m
-                      )[, -1],
-                      type = "response"
-                    ) |>
-                    as.double()
-                )
-            }
-          )
+                      game_id,
+                      event_id,
+                      xg_rush =
+                        predict(
+                          x_br,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              is_rush,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_rush_secs =
+                        predict(
+                          x_rs,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_secs),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_rush_velo =
+                        predict(
+                          x_rv,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_rush_velo_secs =
+                        predict(
+                          x_rvs,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_secs * rush_velo),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double()
+                    )
+                }
+              )
+          ) |>
+          dplyr::ungroup() |>
+          dplyr::select(data) |>
+          tidyr::unnest(data),
+        by = c("game_id", "event_id")
       ) |>
-      dplyr::ungroup() |>
-      dplyr::select(data) |>
-      tidyr::unnest(data),
-    by = c("game_id", "event_id")
+      dplyr::full_join(
+        training_data |>
+          dplyr::filter(
+            shot_y > 0,
+            shot_zone == "O",
+            position_category != "G",
+            event_team_strength == "EV",
+            home_skater_strength_state %in% c("5v5"),
+            event_type != "BLOCK"
+          ) |>
+          dplyr::group_by(gm_dt = game_date) |>
+          tidyr::nest() |>
+          dplyr::inner_join(dynamic_xg) |>
+          dplyr::inner_join(shot_blocker_density_ests) |>
+          dplyr::mutate(
+            data =
+              purrr::pmap(
+                list(
+                  d = data,
+                  b = shot_blocker_data_5v5_basic,
+                  st = shot_blocker_data_5v5_shot_type,
+                  stp = shot_blocker_data_5v5_shot_type_point,
+                  xb = xg_5v5_rush_velo_blocker_basic,
+                  xst = xg_5v5_rush_velo_blocker_shot_type,
+                  xstp = xg_5v5_rush_velo_blocker_shot_type_point
+                ),
+                function(d, b, st, stp, xb, xst, xstp) {
+                  d <-
+                    d |>
+                    dplyr::inner_join(
+                      b |>
+                        dplyr::transmute(
+                          shot_x, shot_y, block_dens_basic = blocker_dens
+                        ),
+                      by = c("shot_x", "shot_y")
+                    ) |>
+                    dplyr::inner_join(
+                      st |>
+                        dplyr::transmute(
+                          shot_x, shot_y, shot_type, block_dens_shot_type = blocker_dens
+                        ),
+                      by = c("shot_x", "shot_y", "shot_type")
+                    ) |>
+                    dplyr::inner_join(
+                      stp |>
+                        dplyr::transmute(
+                          shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
+                        ),
+                      by = c("shot_x", "shot_y", "shot_type", "point_shot")
+                    )
+
+                  m <-
+                    d |>
+                    dplyr::mutate(
+                      shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
+                      shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
+                      dist_center = sqrt(shot_x**2 + shot_y**2),
+                      dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
+                      dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
+                      angle_near_post = atan((abs(shot_x) - 3) / shot_y),
+                      angle_far_post = atan((abs(shot_x) + 3) / shot_y),
+                      h_angle = abs(angle_near_post - angle_far_post),
+                      l_adj = cos(h_angle / 2) * dist_near_post,
+                      width = 2 * sqrt(dist_near_post**2 - l_adj**2),
+                      height_far_post = 4 * (dist_near_post / dist_far_post),
+                      target_area = width * ((height_far_post + 4) / 2)
+                    ) |>
+                    dplyr::select(-c(dist_near_post:height_far_post)) |>
+                    dplyr::ungroup() |>
+                    dplyr::transmute(
+                      is_goal = as.integer(event_type == "GOAL"),
+                      dist_center,
+                      dist_center_2 = dist_center**2,
+                      dist_center_3 = dist_center**3,
+                      target_area,
+                      is_slap = as.integer(shot_type == "Slap"),
+                      is_tip = as.integer(shot_type == "Tip In/Deflection"),
+                      is_other = as.integer(shot_type == "Backhand/Other"),
+                      is_rush,
+                      # rush_secs,
+                      rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
+                      block_dens_basic,
+                      block_dens_shot_type,
+                      block_dens_shot_type_point
+                    ) |>
+                    dplyr::filter(
+                      !is.na(is_goal) &
+                        !is.na(dist_center) &
+                        !is.na(target_area) &
+                        !is.na(block_dens_basic)
+                    )
+
+                  d |>
+                    dplyr::transmute(
+                      game_id,
+                      event_id,
+                      xg_blockers_basic =
+                        predict(
+                          xb,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_basic,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_blockers_shot_type =
+                        predict(
+                          xst,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_blockers_shot_type_point =
+                        predict(
+                          xstp,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double()
+                    )
+                }
+              )
+          ) |>
+          dplyr::ungroup() |>
+          dplyr::select(data) |>
+          tidyr::unnest(data),
+        by = c("game_id", "event_id")
+      ) |>
+      dplyr::full_join(
+        training_data |>
+          dplyr::filter(
+            shot_y > 0,
+            shot_zone == "O",
+            position_category != "G",
+            event_team_strength == "EV",
+            home_skater_strength_state %in% c("5v5"),
+            event_type != "BLOCK"
+          ) |>
+          dplyr::group_by(gm_dt = game_date) |>
+          tidyr::nest() |>
+          dplyr::inner_join(dynamic_xg) |>
+          dplyr::inner_join(shot_blocker_density_ests) |>
+          dplyr::mutate(
+            data =
+              purrr::pmap(
+                list(
+                  d = data,
+                  stp = shot_blocker_data_5v5_shot_type_point,
+                  xf = xg_5v5_rush_velo_blocker_basic_fac,
+                  xfw = xg_5v5_rush_velo_blocker_basic_fac_win,
+                  xfs = xg_5v5_rush_velo_blocker_basic_fac_secs,
+                  xfws = xg_5v5_rush_velo_blocker_basic_fac_win_secs
+                ),
+                function(d,stp, xf, xfw, xfs, xfws) {
+                  d <-
+                    d |>
+                    dplyr::inner_join(
+                      stp |>
+                        dplyr::transmute(
+                          shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
+                        ),
+                      by = c("shot_x", "shot_y", "shot_type", "point_shot")
+                    )
+
+                  m <-
+                    d |>
+                    dplyr::mutate(
+                      shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
+                      shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
+                      dist_center = sqrt(shot_x**2 + shot_y**2),
+                      dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
+                      dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
+                      angle_near_post = atan((abs(shot_x) - 3) / shot_y),
+                      angle_far_post = atan((abs(shot_x) + 3) / shot_y),
+                      h_angle = abs(angle_near_post - angle_far_post),
+                      l_adj = cos(h_angle / 2) * dist_near_post,
+                      width = 2 * sqrt(dist_near_post**2 - l_adj**2),
+                      height_far_post = 4 * (dist_near_post / dist_far_post),
+                      target_area = width * ((height_far_post + 4) / 2)
+                    ) |>
+                    dplyr::select(-c(dist_near_post:height_far_post)) |>
+                    dplyr::ungroup() |>
+                    dplyr::transmute(
+                      is_goal = as.integer(event_type == "GOAL"),
+                      dist_center,
+                      dist_center_2 = dist_center**2,
+                      dist_center_3 = dist_center**3,
+                      target_area,
+                      is_slap = as.integer(shot_type == "Slap"),
+                      is_tip = as.integer(shot_type == "Tip In/Deflection"),
+                      is_other = as.integer(shot_type == "Backhand/Other"),
+                      is_rush,
+                      # rush_secs,
+                      rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
+                      block_dens_shot_type_point,
+                      is_off_faceoff,
+                      is_off_faceoff_win,
+                      faceoff_secs
+                    ) |>
+                    dplyr::filter(
+                      !is.na(is_goal) &
+                        !is.na(dist_center) &
+                        !is.na(target_area) &
+                        !is.na(block_dens_shot_type_point)
+                    )
+
+                  d |>
+                    dplyr::transmute(
+                      game_id,
+                      event_id,
+                      xg_fac =
+                        predict(
+                          xf,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              is_off_faceoff,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_fac_win =
+                        predict(
+                          xfw,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              (is_off_faceoff + is_off_faceoff_win),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_fac_secs =
+                        predict(
+                          xfs,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              (is_off_faceoff * faceoff_secs),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_fac_win_secs =
+                        predict(
+                          xfws,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double()
+                    )
+                }
+              )
+          ) |>
+          dplyr::ungroup() |>
+          dplyr::select(data) |>
+          tidyr::unnest(data),
+        by = c("game_id", "event_id")
+      ) |>
+      dplyr::full_join(
+        training_data |>
+          dplyr::filter(
+            shot_y > 0,
+            shot_zone == "O",
+            position_category != "G",
+            event_team_strength == "EV",
+            home_skater_strength_state %in% c("5v5"),
+            event_type != "BLOCK"
+          ) |>
+          dplyr::group_by(gm_dt = game_date) |>
+          tidyr::nest() |>
+          dplyr::inner_join(dynamic_xg) |>
+          dplyr::inner_join(shot_blocker_density_ests) |>
+          dplyr::mutate(
+            data =
+              purrr::pmap(
+                list(
+                  d = data,
+                  stp = shot_blocker_data_5v5_shot_type_point,
+                  xf = xg_5v5_rush_velo_blocker_basic_fac_win_secs_follow,
+                  xof = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_follow,
+                  xrf = xg_5v5_rush_velo_blocker_basic_fac_win_secs_reach_follow,
+                  xorf = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow,
+                  xorfi = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow_int
+                ),
+                function(d,stp, xf, xof, xrf, xorf, xorfi) {
+                  d <-
+                    d |>
+                    dplyr::inner_join(
+                      stp |>
+                        dplyr::transmute(
+                          shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
+                        ),
+                      by = c("shot_x", "shot_y", "shot_type", "point_shot")
+                    )
+
+                  m <-
+                    d |>
+                    dplyr::mutate(
+                      shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
+                      shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
+                      dist_center = sqrt(shot_x**2 + shot_y**2),
+                      dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
+                      dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
+                      angle_near_post = atan((abs(shot_x) - 3) / shot_y),
+                      angle_far_post = atan((abs(shot_x) + 3) / shot_y),
+                      h_angle = abs(angle_near_post - angle_far_post),
+                      l_adj = cos(h_angle / 2) * dist_near_post,
+                      width = 2 * sqrt(dist_near_post**2 - l_adj**2),
+                      height_far_post = 4 * (dist_near_post / dist_far_post),
+                      target_area = width * ((height_far_post + 4) / 2)
+                    ) |>
+                    dplyr::select(-c(dist_near_post:height_far_post)) |>
+                    dplyr::ungroup() |>
+                    dplyr::transmute(
+                      is_goal = as.integer(event_type == "GOAL"),
+                      dist_center,
+                      dist_center_2 = dist_center**2,
+                      dist_center_3 = dist_center**3,
+                      target_area,
+                      is_slap = as.integer(shot_type == "Slap"),
+                      is_tip = as.integer(shot_type == "Tip In/Deflection"),
+                      is_other = as.integer(shot_type == "Backhand/Other"),
+                      is_rush,
+                      # rush_secs,
+                      rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
+                      block_dens_shot_type_point,
+                      is_off_faceoff,
+                      is_off_faceoff_win,
+                      faceoff_secs,
+                      is_followup_shot,
+                      is_reached_goalie_followup,
+                      is_own_followup
+                    ) |>
+                    dplyr::filter(
+                      !is.na(is_goal) &
+                        !is.na(dist_center) &
+                        !is.na(target_area) &
+                        !is.na(block_dens_shot_type_point)
+                    )
+
+                  d |>
+                    dplyr::transmute(
+                      game_id,
+                      event_id,
+                      xg_follow =
+                        predict(
+                          xf,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
+                              is_followup_shot,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_own_follow =
+                        predict(
+                          xof,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
+                              (is_followup_shot + is_own_followup),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_reach_follow =
+                        predict(
+                          xrf,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
+                              is_reached_goalie_followup,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_own_reach_follow =
+                        predict(
+                          xorf,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
+                              (is_reached_goalie_followup + is_own_followup),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_own_reach_follow_int =
+                        predict(
+                          xorfi,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
+                              ((is_followup_shot + is_reached_goalie_followup) * is_own_followup),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double()
+                    )
+                }
+              )
+          ) |>
+          dplyr::ungroup() |>
+          dplyr::select(data) |>
+          tidyr::unnest(data),
+        by = c("game_id", "event_id")
+      ) |>
+      dplyr::full_join(
+        training_data |>
+          dplyr::filter(
+            shot_y > 0,
+            shot_zone == "O",
+            position_category != "G",
+            event_team_strength == "EV",
+            home_skater_strength_state %in% c("5v5"),
+            event_type != "BLOCK"
+          ) |>
+          dplyr::group_by(gm_dt = game_date) |>
+          tidyr::nest() |>
+          dplyr::inner_join(dynamic_xg) |>
+          dplyr::inner_join(shot_blocker_density_ests) |>
+          dplyr::mutate(
+            data =
+              purrr::pmap(
+                list(
+                  d = data,
+                  stp = shot_blocker_data_5v5_shot_type_point,
+                  xorfa = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow_all
+                ),
+                function(d, stp, xorfa) {
+                  d <-
+                    d |>
+                    dplyr::inner_join(
+                      stp |>
+                        dplyr::transmute(
+                          shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
+                        ),
+                      by = c("shot_x", "shot_y", "shot_type", "point_shot")
+                    )
+
+                  m <-
+                    d |>
+                    dplyr::mutate(
+                      shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
+                      shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
+                      dist_center = sqrt(shot_x**2 + shot_y**2),
+                      dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
+                      dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
+                      angle_near_post = atan((abs(shot_x) - 3) / shot_y),
+                      angle_far_post = atan((abs(shot_x) + 3) / shot_y),
+                      h_angle = abs(angle_near_post - angle_far_post),
+                      l_adj = cos(h_angle / 2) * dist_near_post,
+                      width = 2 * sqrt(dist_near_post**2 - l_adj**2),
+                      height_far_post = 4 * (dist_near_post / dist_far_post),
+                      target_area = width * ((height_far_post + 4) / 2)
+                    ) |>
+                    dplyr::select(-c(dist_near_post:height_far_post)) |>
+                    dplyr::ungroup() |>
+                    dplyr::transmute(
+                      is_goal = as.integer(event_type == "GOAL"),
+                      dist_center,
+                      dist_center_2 = dist_center**2,
+                      dist_center_3 = dist_center**3,
+                      target_area,
+                      is_slap = as.integer(shot_type == "Slap"),
+                      is_tip = as.integer(shot_type == "Tip In/Deflection"),
+                      is_other = as.integer(shot_type == "Backhand/Other"),
+                      is_rush,
+                      # rush_secs,
+                      rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
+                      block_dens_shot_type_point,
+                      is_off_faceoff,
+                      is_off_faceoff_win,
+                      faceoff_secs,
+                      is_followup_shot,
+                      is_reached_goalie_followup,
+                      is_own_followup
+                    ) |>
+                    dplyr::filter(
+                      !is.na(is_goal) &
+                        !is.na(dist_center) &
+                        !is.na(target_area) &
+                        !is.na(block_dens_shot_type_point)
+                    )
+
+                  d |>
+                    dplyr::transmute(
+                      game_id,
+                      event_id,
+                      xg_own_reach_follow_all =
+                        predict(
+                          xorfa,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
+                              (is_followup_shot + is_reached_goalie_followup + is_own_followup),
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double()
+                    )
+                }
+              )
+          ) |>
+          dplyr::ungroup() |>
+          dplyr::select(data) |>
+          tidyr::unnest(data),
+        by = c("game_id", "event_id")
+      ) |>
+      dplyr::full_join(
+        training_data |>
+          dplyr::filter(
+            shot_y > 0,
+            shot_zone == "O",
+            position_category != "G",
+            event_team_strength == "EV",
+            home_skater_strength_state %in% c("5v5"),
+            event_type != "BLOCK"
+          ) |>
+          dplyr::group_by(gm_dt = game_date) |>
+          tidyr::nest() |>
+          dplyr::inner_join(dynamic_xg) |>
+          dplyr::inner_join(shot_blocker_density_ests) |>
+          dplyr::mutate(
+            data =
+              purrr::pmap(
+                list(
+                  d = data,
+                  stp = shot_blocker_data_5v5_shot_type_point,
+                  xs = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow_all_secs,
+                  xv = xg_5v5_rush_velo_blocker_basic_fac_win_secs_own_reach_follow_all_velo
+                ),
+                function(d,stp, xs, xv) {
+                  d <-
+                    d |>
+                    dplyr::inner_join(
+                      stp |>
+                        dplyr::transmute(
+                          shot_x, shot_y, shot_type, point_shot, block_dens_shot_type_point = blocker_dens
+                        ),
+                      by = c("shot_x", "shot_y", "shot_type", "point_shot")
+                    )
+
+                  m <-
+                    d |>
+                    dplyr::mutate(
+                      shot_x = ifelse(event_type == "BLOCK", est_x, shot_x),
+                      shot_y = ifelse(event_type == "BLOCK", est_y, shot_y),
+                      dist_center = sqrt(shot_x**2 + shot_y**2),
+                      dist_near_post = sqrt((abs(shot_x) - 3)**2 + shot_y**2),
+                      dist_far_post = sqrt((abs(shot_x) + 3)**2 + shot_y**2),
+                      angle_near_post = atan((abs(shot_x) - 3) / shot_y),
+                      angle_far_post = atan((abs(shot_x) + 3) / shot_y),
+                      h_angle = abs(angle_near_post - angle_far_post),
+                      l_adj = cos(h_angle / 2) * dist_near_post,
+                      width = 2 * sqrt(dist_near_post**2 - l_adj**2),
+                      height_far_post = 4 * (dist_near_post / dist_far_post),
+                      target_area = width * ((height_far_post + 4) / 2)
+                    ) |>
+                    dplyr::select(-c(dist_near_post:height_far_post)) |>
+                    dplyr::ungroup() |>
+                    dplyr::transmute(
+                      is_goal = as.integer(event_type == "GOAL"),
+                      dist_center,
+                      dist_center_2 = dist_center**2,
+                      dist_center_3 = dist_center**3,
+                      target_area,
+                      is_slap = as.integer(shot_type == "Slap"),
+                      is_tip = as.integer(shot_type == "Tip In/Deflection"),
+                      is_other = as.integer(shot_type == "Backhand/Other"),
+                      is_rush,
+                      # rush_secs,
+                      rush_velo = ifelse(rush_velo > 70, 70, rush_velo),
+                      block_dens_shot_type_point,
+                      is_off_faceoff,
+                      is_off_faceoff_win,
+                      faceoff_secs,
+                      is_followup_shot,
+                      is_reached_goalie_followup,
+                      is_own_followup,
+                      followup_secs,
+                      angle_change_velo
+                    ) |>
+                    dplyr::filter(
+                      !is.na(is_goal) &
+                        !is.na(dist_center) &
+                        !is.na(target_area) &
+                        !is.na(block_dens_shot_type_point)
+                    )
+
+                  d |>
+                    dplyr::transmute(
+                      game_id,
+                      event_id,
+                      xg_own_reach_follow_all_secs =
+                        predict(
+                          xs,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
+                              (is_followup_shot + is_reached_goalie_followup + is_own_followup) * followup_secs,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double(),
+                      xg_own_reach_follow_all_velo =
+                        predict(
+                          xv,
+                          model.matrix(
+                            is_goal ~
+                              (
+                                (
+                                  dist_center +
+                                    dist_center_2 +
+                                    dist_center_3
+                                ) * target_area
+                              ) +
+                              is_slap +
+                              is_tip +
+                              is_other +
+                              (is_rush * rush_velo) +
+                              block_dens_shot_type_point +
+                              ((is_off_faceoff + is_off_faceoff_win) * faceoff_secs) +
+                              (is_followup_shot + is_reached_goalie_followup + is_own_followup) * angle_change_velo,
+                            m
+                          )[, -1],
+                          type = "response"
+                        ) |>
+                        as.double()
+                    )
+                }
+              )
+          ) |>
+          dplyr::ungroup() |>
+          dplyr::select(data) |>
+          tidyr::unnest(data),
+        by = c("game_id", "event_id")
+      ) |>
+      # colnames()
+      dplyr::select(
+        game_id, event_id,
+        xg_game_weight,
+        xg_shot_type,
+        xg_rush_velo,
+        xg_blockers_basic,
+        xg_blockers_shot_type_point,
+        xg_fac_win_secs,
+        xg_own_reach_follow_all_secs
+      )
   )

@@ -3866,8 +3866,8 @@ training_data |>
               angle_near_post = atan((abs(shot_x) - 3) / shot_y),
               angle_far_post = atan((abs(shot_x) + 3) / shot_y),
               h_angle = abs(angle_near_post - angle_far_post),
-              l_adj = cos(h_angle / 2) * dist_near_post,
-              width = 2 * sqrt(dist_near_post**2 - l_adj**2),
+              length_adjacent = cos(h_angle / 2) * dist_near_post,
+              width = 2 * sqrt(dist_near_post**2 - length_adjacent**2),
               height_far_post = 4 * (dist_near_post / dist_far_post),
               target_area = width * ((height_far_post + 4) / 2)
             ) |>
