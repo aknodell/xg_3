@@ -1,4 +1,31 @@
-test <-
+get_min_model <- function(mat, is_goal) {
+  set.seed(1138)
+  cv <-
+    glmnet::cv.glmnet(
+      mat,
+      is_goal,
+      family = "binomial",
+      alpha = 0,
+      parallel = T,
+      type.measure = "mse"
+    )
+
+  set.seed(1138)
+  # min_basic <-
+  glmnet::glmnet(
+    mat,
+    is_goal,
+    family = "binomial",
+    alpha = 0,
+    parallel = T,
+    lambda = cv$lambda.min
+  )
+}
+
+doParallel::registerDoParallel(cores = 10)
+
+dynamic_xg_2 <-
+# test <-
   nhl_db_con |>
   odbc::dbGetQuery(
     "select season, game_id gm_id, game_date gm_dt from games where season >= 20212022 and session = 2"
@@ -8,11 +35,11 @@ test <-
   tibble::rowid_to_column(var = "game_num") |>
   dplyr::filter(game_num > 1312) |>
   dplyr::group_by(season, gm_dt) |>
-  dplyr::summarise(min = min(game_num)) |>
-  dplyr::group_by(season) |>
-  dplyr::filter(lubridate::day(gm_dt) == 12) |>
+  dplyr::summarise(min = min(game_num), .groups = "drop") |>
+  # dplyr::group_by(season) |>
+  # dplyr::filter(lubridate::day(gm_dt) == 12) |>
   # View()
-  # head() |>
+  # head(1) |>
   dplyr::mutate(
     xg_results =
       purrr::map2(
@@ -56,6 +83,85 @@ test <-
                 angle_center +
                 is_slap +
                 is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_basic <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing,
+              shots
+            )[, -1]
+
+          min_score <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_rush,
+              shots
+            )[, -1]
+
+          min_score_rush <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_rush +
+                is_reached_goalie_followup,
+              shots
+            )[, -1]
+
+          min_score_rush_rebound <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_rush +
+                is_reached_goalie_followup +
+                is_off_faceoff,
+              shots
+            )[, -1]
+
+          min_score_rush_rebound_fac <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
                 is_other +
                 is_leading +
                 is_trailing +
@@ -66,65 +172,496 @@ test <-
               shots
             )[, -1]
 
-          set.seed(1138)
-          cv <-
-            glmnet::cv.glmnet(
-              mat,
-              shots$is_goal,
-              family = "binomial",
-              alpha = 1,
-              type.measure = "mse"
-            )
+          min_score_rush_rebound_fac_turn <- get_min_model(mat, shots$is_goal)
 
-          set.seed(1138)
-          min_score_rush_rebound_fac_turn <-
-            glmnet::glmnet(
-              mat,
-              shots$is_goal,
-              family = "binomial",
-              alpha = 1,
-              lambda = cv$lambda.min
-            )
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_rush +
+                is_reached_goalie_followup +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_score_rush_rebound_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_rush +
+                is_off_faceoff,
+              shots
+            )[, -1]
+
+          min_score_rush_fac <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_rush +
+                is_off_faceoff +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_score_rush_fac_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_rush +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_score_rush_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_reached_goalie_followup,
+              shots
+            )[, -1]
+
+          min_score_rebound <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_reached_goalie_followup +
+                is_off_faceoff,
+              shots
+            )[, -1]
+
+          min_score_rebound_fac <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_reached_goalie_followup +
+                is_off_faceoff +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_score_rebound_fac_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_reached_goalie_followup +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_score_rebound_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_off_faceoff,
+              shots
+            )[, -1]
+
+          min_score_fac <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_off_faceoff +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_score_fac_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_score_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_rush,
+              shots
+            )[, -1]
+
+          min_rush <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_rush +
+                is_reached_goalie_followup,
+              shots
+            )[, -1]
+
+          min_rush_rebound <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_rush +
+                is_reached_goalie_followup +
+                is_off_faceoff,
+              shots
+            )[, -1]
+
+          min_rush_rebound_fac <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_rush +
+                is_reached_goalie_followup +
+                is_off_faceoff +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_rush_rebound_fac_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_rush +
+                is_reached_goalie_followup +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_rush_rebound_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_rush +
+                is_off_faceoff,
+              shots
+            )[, -1]
+
+          min_rush_fac <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_rush +
+                is_off_faceoff +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_rush_fac_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_rush +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_rush_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_reached_goalie_followup,
+              shots
+            )[, -1]
+
+          min_rebound <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_reached_goalie_followup +
+                is_off_faceoff,
+              shots
+            )[, -1]
+
+          min_rebound_fac <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_reached_goalie_followup +
+                is_off_faceoff +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_rebound_fac_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_reached_goalie_followup +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_rebound_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_off_faceoff,
+              shots
+            )[, -1]
+
+          min_fac <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_off_faceoff +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_fac_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other +
+                is_off_turnover,
+              shots
+            )[, -1]
+
+          min_turn <- get_min_model(mat, shots$is_goal)
 
           print("time: {(Sys.time() - start_time) |> hms::as_hms() |> round() |> hms::as_hms()}" |> glue::glue())
 
           tibble::tibble(
-            basic = list(min_basic),
-            score = list(min_score),
-            score_rush = list(min_score_rush),
-            score_rush_rebound = list(min_score_rush_rebound),
-            score_rush_rebound_fac = list(min_score_rush_rebound_fac),
-            score_rush_rebound_fac_turn = list(min_score_rush_rebound_fac_turn),
-            score_rush_rebound_turn = list(min_score_rush_rebound_turn),
-            score_rush_fac = list(min_score_rush_fac),
-            score_rush_fac_turn = list(min_score_rush_fac_turn),
-            score_rush_turn = list(min_score_rush_turn),
-            score_rebound = list(min_score_rebound),
-            score_rebound_fac = list(min_score_rebound_fac),
-            score_rebound_fac_turn = list(min_score_rebound_fac_turn),
-            score_rebound_turn = list(min_score_rebound_turn),
-            score_fac = list(min_score_fac),
-            score_fac_turn = list(min_score_fac_turn),
-            score_turn = list(min_score_turn),
-            rush = list(min_rush),
-            rush_rebound = list(min_rush_rebound),
-            rush_rebound_fac = list(min_rush_rebound_fac),
-            rush_rebound_fac_turn = list(min_rush_rebound_fac_turn),
-            rush_rebound_turn = list(min_rush_rebound_turn),
-            rush_fac = list(min_rush_fac),
-            rush_fac_turn = list(min_rush_fac_turn),
-            rush_turn = list(min_rush_turn),
-            rebound = list(min_rebound),
-            rebound_fac = list(min_rebound_fac),
-            rebound_fac_turn = list(min_rebound_fac_turn),
-            rebound_turn = list(min_rebound_turn),
-            fac = list(min_fac),
-            fac_turn = list(min_fac_turn),
-            turn = list(min_turn)
+            basic = list(min_basic), #
+            score = list(min_score), #
+            score_rush = list(min_score_rush), #
+            score_rush_rebound = list(min_score_rush_rebound), #
+            score_rush_rebound_fac = list(min_score_rush_rebound_fac), #
+            score_rush_rebound_fac_turn = list(min_score_rush_rebound_fac_turn), #
+            score_rush_rebound_turn = list(min_score_rush_rebound_turn), #
+            score_rush_fac = list(min_score_rush_fac), #
+            score_rush_fac_turn = list(min_score_rush_fac_turn), #
+            score_rush_turn = list(min_score_rush_turn), #
+            score_rebound = list(min_score_rebound), #
+            score_rebound_fac = list(min_score_rebound_fac), #
+            score_rebound_fac_turn = list(min_score_rebound_fac_turn), #
+            score_rebound_turn = list(min_score_rebound_turn), #
+            score_fac = list(min_score_fac), #
+            score_fac_turn = list(min_score_fac_turn), #
+            score_turn = list(min_score_turn), #
+            rush = list(min_rush), #
+            rush_rebound = list(min_rush_rebound), #
+            rush_rebound_fac = list(min_rush_rebound_fac), #
+            rush_rebound_fac_turn = list(min_rush_rebound_fac_turn), #
+            rush_rebound_turn = list(min_rush_rebound_turn), #
+            rush_fac = list(min_rush_fac), #
+            rush_fac_turn = list(min_rush_fac_turn), #
+            rush_turn = list(min_rush_turn), #
+            rebound = list(min_rebound), #
+            rebound_fac = list(min_rebound_fac), #
+            rebound_fac_turn = list(min_rebound_fac_turn), #
+            rebound_turn = list(min_rebound_turn), #
+            fac = list(min_fac), #
+            fac_turn = list(min_fac_turn), #
+            turn = list(min_turn) #
           )
         }
       )
   )
+
+test |>
+  dplyr::ungroup() |>
+  dplyr::select(xg_results) |>
+  tidyr::unnest(xg_results) |>
+  tidyr::pivot_longer(
+    tidyselect::everything(),
+    names_to = "model"
+  ) |>
+  dplyr::mutate(
+    coefs =
+      purrr::map(
+        value,
+        function(m) {
+          coef(m) |>
+            as.matrix() |>
+            as.data.frame() |>
+            tibble::rownames_to_column() |>
+            tibble::as_tibble()
+        }
+      )
+  ) |>
+  dplyr::select(-c(value)) |>
+  tidyr::unnest(coefs) |>
+  dplyr::filter(
+    !rowname %in% c("(Intercept)", "dist_to_goalie_optimal", "angle_center", "is_slap", "is_tip", "is_other")
+  ) |>
+  tidyr::pivot_wider(
+    id_cols = model,
+    values_from = s0,
+    names_from = rowname
+  ) |>
+  View()
+
+
 
 test |>
   tidyr::unnest(xg_results) |>
@@ -147,6 +684,6 @@ test |>
     id_cols = rowname,
     values_from = s0,
     names_from = gm_dt
-  ) |>
+  )
   View()
 
