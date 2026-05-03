@@ -650,7 +650,7 @@ goalie_geometry <-
         dist_center - optimal_goalie_distance
       )
   ) |>
-  dplyr::select(
+  dplyr::transmute(
     shot_x,
     shot_y,
     optimal_goalie_x,
@@ -658,6 +658,14 @@ goalie_geometry <-
     angle_center,
     dist_to_goalie_optimal,
     optimal_width_coverage,
+    h_angle,
+    width_at_net,
+    avg_height = (height_far_post + 4) / 2,
+    v_angle =
+      atan(
+        avg_height /
+          (length_adjacent + ((dist_center - length_adjacent) / 2))
+      ),
     target_area
   )
   # ggplot2::ggplot() +

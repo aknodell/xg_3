@@ -65,14 +65,7 @@ dynamic_xg_2 <-
               event_type != "BLOCK"
             ) |>
             dplyr::inner_join(
-              goalie_geometry |>
-                dplyr::mutate(
-                  dist_to_center = sqrt((shot_x**2) + (shot_y**2)),
-                  dist_to_center_2 = dist_to_center**2,
-                  dist_to_center_3 = dist_to_center**3,
-                  dist_to_goalie_optimal_2 = dist_to_goalie_optimal**2,
-                  dist_to_goalie_optimal_3 = dist_to_goalie_optimal**3,
-                ),
+              goalie_geometry,
               by = c("shot_x", "shot_y")
             )
 
@@ -80,7 +73,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other,
@@ -93,7 +87,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -108,7 +103,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -124,7 +120,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -141,7 +138,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -159,7 +157,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -178,7 +177,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -196,7 +196,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -213,7 +214,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -231,7 +233,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -248,7 +251,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -264,7 +268,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -281,7 +286,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -299,7 +305,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -316,7 +323,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -332,7 +340,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -349,7 +358,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -365,7 +375,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -379,7 +390,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -394,7 +406,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -410,7 +423,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -427,7 +441,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -443,7 +458,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -458,7 +474,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -474,7 +491,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -489,7 +507,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -503,7 +522,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -518,7 +538,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -534,7 +555,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -549,7 +571,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -563,7 +586,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -578,7 +602,8 @@ dynamic_xg_2 <-
             model.matrix(
               is_goal ~
                 dist_to_goalie_optimal +
-                angle_center +
+                width_at_net +
+                avg_height +
                 is_slap +
                 is_tip +
                 is_other +
@@ -628,6 +653,8 @@ dynamic_xg_2 <-
       )
   )
 
+
+
 test |>
   dplyr::ungroup() |>
   dplyr::select(xg_results) |>
@@ -652,7 +679,7 @@ test |>
   dplyr::select(-c(value)) |>
   tidyr::unnest(coefs) |>
   dplyr::filter(
-    !rowname %in% c("(Intercept)", "dist_to_goalie_optimal", "angle_center", "is_slap", "is_tip", "is_other")
+    !rowname %in% c("(Intercept)", "dist_to_goalie_optimal", "is_slap", "is_tip", "is_other")
   ) |>
   tidyr::pivot_wider(
     id_cols = model,
@@ -662,13 +689,444 @@ test |>
   View()
 
 
+test <-
+  nhl_db_con |>
+  odbc::dbGetQuery(
+    "select season, game_id gm_id, game_date gm_dt from games where season >= 20212022 and session = 2"
+  ) |>
+  tibble::tibble() |>
+  dplyr::arrange(season, gm_dt, gm_id) |>
+  tibble::rowid_to_column(var = "game_num") |>
+  dplyr::filter(game_num > 1312) |>
+  dplyr::group_by(season, gm_dt) |>
+  dplyr::summarise(min = min(game_num), .groups = "drop") |>
+  # dplyr::group_by(season) |>
+  # dplyr::filter(lubridate::day(gm_dt) == 12) |>
+  # View()
+  # head(1) |>
+  dplyr::mutate(
+    xg_results =
+      purrr::map2(
+        gm_dt,
+        min,
+        function(dt, m) {
+          start_time <- Sys.time()
+
+          print(
+            "{dt} start" |>
+              glue::glue()
+          )
+
+          shots <-
+            training_data |>
+            dplyr::filter(
+              shot_y > 0,
+              shot_zone == "O",
+              position_category != "G",
+              event_team_strength == "EV",
+              home_skater_strength_state %in% c("5v5"),
+              game_num < m, game_num >= m - 1312,
+              event_type != "BLOCK"
+            ) |>
+            dplyr::inner_join(
+              goalie_geometry,
+              by = c("shot_x", "shot_y")
+            )
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_height_width <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                optimal_width_coverage +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_height_width_cover <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                optimal_width_coverage +
+                h_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_height_width_cover_h <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                optimal_width_coverage +
+                h_angle +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_height_width_cover_h_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                optimal_width_coverage +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_height_width_cover_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                h_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_height_width_h <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                h_angle +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_height_width_h_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_height_width_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                target_area +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_area <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                target_area +
+                optimal_width_coverage +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_area_cover <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                target_area +
+                optimal_width_coverage +
+                h_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_area_cover_h <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                target_area +
+                optimal_width_coverage +
+                h_angle +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_area_cover_h_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                target_area +
+                optimal_width_coverage +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_area_cover_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                target_area +
+                h_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_area_h <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                target_area +
+                h_angle +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_area_h_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                target_area +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_area_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_angle <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                optimal_width_coverage +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_angle_cover <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                optimal_width_coverage +
+                h_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_angle_cover_h <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                optimal_width_coverage +
+                h_angle +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_angle_cover_h_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                optimal_width_coverage +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_angle_cover_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                h_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_angle_h <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                h_angle +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_angle_h_v <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                angle_center +
+                v_angle +
+                is_slap +
+                is_tip +
+                is_other,
+              shots
+            )[, -1]
+
+          min_angle_v <- get_min_model(mat, shots$is_goal)
+
+          print("time: {(Sys.time() - start_time) |> hms::as_hms() |> round() |> hms::as_hms()}" |> glue::glue())
+
+          tibble::tibble(
+            height_width = list(min_height_width),
+            height_width_cover = list(min_height_width_cover),
+            height_width_cover_h = list(min_height_width_cover_h),
+            height_width_cover_h_v = list(min_height_width_cover_h_v),
+            height_width_cover_v = list(min_height_width_cover_v),
+            height_width_h = list(min_height_width_h),
+            height_width_h_v = list(min_height_width_h_v),
+            height_width_v = list(min_height_width_v),
+            area = list(min_area),
+            area_cover = list(min_area_cover),
+            area_cover_h = list(min_area_cover_h),
+            area_cover_h_v = list(min_area_cover_h_v),
+            area_cover_v = list(min_area_cover_v),
+            area_h = list(min_area_h),
+            area_h_v = list(min_area_h_v),
+            area_v = list(min_area_v),
+            angle = list(min_angle),
+            angle_cover = list(min_angle_cover),
+            angle_cover_h = list(min_angle_cover_h),
+            angle_cover_h_v = list(min_angle_cover_h_v),
+            angle_cover_v = list(min_angle_cover_v),
+            angle_h = list(min_angle_h),
+            angle_h_v = list(min_angle_h_v),
+            angle_v = list(min_angle_v)
+          )
+        }
+      )
+  )
 
 test |>
   tidyr::unnest(xg_results) |>
   dplyr::mutate(
     coefs =
       purrr::map(
-        m,
+        basic,
         function(m) {
           coef(m) |>
             as.matrix() |>
@@ -678,12 +1136,297 @@ test |>
         }
       )
   ) |>
-  dplyr::select(-c(m)) |>
+  dplyr::select(-c(basic)) |>
   tidyr::unnest(coefs) |>
+  # dplyr::group_by(rowname, sign(s0)) |>
+  # dplyr::tally()
   tidyr::pivot_wider(
-    id_cols = rowname,
+    # id_cols = rowname,
+    id_cols = gm_dt,
     values_from = s0,
-    names_from = gm_dt
-  )
+    # names_from = gm_dt
+    names_from = rowname
+  ) |>
+  dplyr::select(-c(gm_dt, `(Intercept)`)) |>
+  corrr::correlate() |>
   View()
 
+
+# dynamic_xg_2 |>
+location_metrics <-
+  test |>
+  # head(1) |>
+  tidyr::unnest(xg_results) |>
+  dplyr::transmute(
+    season,
+    gm_dt,
+    dplyr::across(
+      -c(season:min),
+      .fns =
+        function(m) {
+          purrr::map2(
+            .x = m,
+            .y = gm_dt,
+            function(m, d) {
+              shots <-
+                training_data |>
+                dplyr::filter(
+                  game_date == d,
+                  shot_y > 0,
+                  shot_zone == "O",
+                  position_category != "G",
+                  event_team_strength == "EV",
+                  home_skater_strength_state %in% c("5v5"),
+                  event_type != "BLOCK"
+                ) |>
+                dplyr::inner_join(
+                  goalie_geometry |>
+                    dplyr::mutate(
+                      dist_to_center = sqrt((shot_x**2) + (shot_y**2)),
+                      dist_to_center_2 = dist_to_center**2,
+                      dist_to_center_3 = dist_to_center**3,
+                      dist_to_goalie_optimal_2 = dist_to_goalie_optimal**2,
+                      dist_to_goalie_optimal_3 = dist_to_goalie_optimal**3,
+                    ),
+                  by = c("shot_x", "shot_y")
+                ) |>
+                dplyr::select(
+                  tidyselect::any_of(c("is_goal", coef(m) |> rownames()))
+                )
+
+              xg = predict(
+                m,
+                model.matrix(
+                  is_goal ~ .,
+                  shots
+                )[, -1],
+                type = "response"
+              ) |>
+                as.double()
+            }
+          )
+        }
+    ),
+    is_goal =
+      purrr::map(
+        gm_dt,
+        function(d) {
+          training_data |>
+            dplyr::filter(
+              game_date == d,
+              shot_y > 0,
+              shot_zone == "O",
+              position_category != "G",
+              event_team_strength == "EV",
+              home_skater_strength_state %in% c("5v5"),
+              event_type != "BLOCK"
+            ) |>
+            dplyr::pull(is_goal)
+        }
+      )
+  ) |>
+  tidyr::unnest(tidyselect::everything()) |>
+  dplyr::select(-c(season, gm_dt)) |>
+  dplyr::summarise(
+    dplyr::across(
+      height_width:angle_v,
+      .fns = function(xg) {
+        sum(xg) / sum(is_goal)
+      },
+      .names = "{.col}_calib"
+    ),
+    dplyr::across(
+      height_width:angle_v,
+      .fns = function(xg) {
+        MLmetrics::LogLoss(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_ll"
+    ),
+    dplyr::across(
+      height_width:angle_v,
+      .fns = function(xg) {
+        MLmetrics::AUC(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_auc"
+    )
+  ) |>
+  tidyr::pivot_longer(tidyselect::everything()) |>
+  dplyr::transmute(
+    value,
+    model = name |> stringr::str_remove("_(calib|ll|auc)"),
+    metric = name |> stringr::str_extract("calib|ll|auc")
+  ) |>
+  tidyr::pivot_wider(
+    id_cols = model,
+    names_from = metric,
+    values_from = value
+  )
+
+location_metrics |>
+  tidyr::pivot_longer(
+    c(ll, auc)
+  ) |>
+  dplyr::group_by(name) |>
+  dplyr::mutate(
+    val_norm = (value - min(value)) / (max(value) - min(value)),
+    val_norm = ifelse(name == "ll", -1 * (val_norm -1), val_norm)
+  ) |>
+  dplyr::group_by(model) |>
+  dplyr::summarise(
+    w_mean =
+      sum(val_norm * ifelse(name == "ll", 2/3, 1/3))
+  ) |>
+  View()
+
+  # ggplot2::ggplot(ggplot2::aes(x = model, y = val_norm)) +
+  # ggplot2::facet_wrap(ggplot2::vars(name), scales = "free", ncol = 2) +
+  # ggplot2::geom_point(size = 3) +
+  # ggplot2::theme_minimal() +
+  # ggplot2::theme(
+  #   axis.text.x = ggplot2::element_text(angle = 90, hjust = 1)
+  # )
+
+context_metrics <-
+  dynamic_xg_2 |>
+  tidyr::unnest(xg_results) |>
+  dplyr::transmute(
+    season,
+    gm_dt,
+    dplyr::across(
+      -c(season:min),
+      .fns =
+        function(m) {
+          purrr::map2(
+            .x = m,
+            .y = gm_dt,
+            function(m, d) {
+              shots <-
+                training_data |>
+                dplyr::filter(
+                  game_date == d,
+                  shot_y > 0,
+                  shot_zone == "O",
+                  position_category != "G",
+                  event_team_strength == "EV",
+                  home_skater_strength_state %in% c("5v5"),
+                  event_type != "BLOCK"
+                ) |>
+                dplyr::inner_join(
+                  goalie_geometry |>
+                    dplyr::mutate(
+                      dist_to_center = sqrt((shot_x**2) + (shot_y**2)),
+                      dist_to_center_2 = dist_to_center**2,
+                      dist_to_center_3 = dist_to_center**3,
+                      dist_to_goalie_optimal_2 = dist_to_goalie_optimal**2,
+                      dist_to_goalie_optimal_3 = dist_to_goalie_optimal**3,
+                    ),
+                  by = c("shot_x", "shot_y")
+                ) |>
+                dplyr::select(
+                  tidyselect::any_of(c("is_goal", coef(m) |> rownames()))
+                )
+
+              xg = predict(
+                m,
+                model.matrix(
+                  is_goal ~ .,
+                  shots
+                )[, -1],
+                type = "response"
+              ) |>
+                as.double()
+            }
+          )
+        }
+    ),
+    is_goal =
+      purrr::map(
+        gm_dt,
+        function(d) {
+          training_data |>
+            dplyr::filter(
+              game_date == d,
+              shot_y > 0,
+              shot_zone == "O",
+              position_category != "G",
+              event_team_strength == "EV",
+              home_skater_strength_state %in% c("5v5"),
+              event_type != "BLOCK"
+            ) |>
+            dplyr::pull(is_goal)
+        }
+      )
+  ) |>
+  tidyr::unnest(tidyselect::everything()) |>
+  dplyr::select(-c(season, gm_dt)) |>
+  dplyr::summarise(
+    dplyr::across(
+      basic:turn,
+      .fns = function(xg) {
+        sum(xg) / sum(is_goal)
+      },
+      .names = "{.col}_calib"
+    ),
+    dplyr::across(
+      basic:turn,
+      .fns = function(xg) {
+        MLmetrics::LogLoss(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_ll"
+    ),
+    dplyr::across(
+      basic:turn,
+      .fns = function(xg) {
+        MLmetrics::AUC(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_auc"
+    )
+  ) |>
+  tidyr::pivot_longer(tidyselect::everything()) |>
+  dplyr::transmute(
+    value,
+    model = name |> stringr::str_remove("_(calib|ll|auc)"),
+    metric = name |> stringr::str_extract("calib|ll|auc")
+  ) |>
+  tidyr::pivot_wider(
+    id_cols = model,
+    names_from = metric,
+    values_from = value
+  )
+
+context_metrics |>
+  View()
+  tidyr::pivot_longer(
+    c(ll, auc)
+  ) |>
+  dplyr::group_by(name) |>
+  dplyr::mutate(
+    val_norm = (value - min(value)) / (max(value) - min(value)),
+    val_norm = ifelse(name == "ll", -1 * (val_norm -1), val_norm)
+  ) |>
+  # dplyr::group_by(model) |>
+  # dplyr::summarise(
+  #   w_mean =
+  #     sum(val_norm * ifelse(name == "ll", 2/3, 1/3))
+  # ) |>
+  # View()
+
+  ggplot2::ggplot(ggplot2::aes(x = model, y = val_norm)) +
+  ggplot2::facet_wrap(ggplot2::vars(name), scales = "free", ncol = 2) +
+  ggplot2::geom_point(size = 3) +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(
+    axis.text.x = ggplot2::element_text(angle = 90, hjust = 1)
+  )
