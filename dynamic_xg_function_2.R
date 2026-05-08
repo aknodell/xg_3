@@ -2905,7 +2905,1454 @@ turn_metrics <-
     values_from = value
   )
 
+View(turn_metrics)
+
+
+
+
+
+
+
+
+rebound_metrics <-
+  dynamic_xg_rebound_testing |>
+  tidyr::unnest(xg_results) |>
+  dplyr::transmute(
+    season,
+    gm_dt,
+    dplyr::across(
+      -c(season:min),
+      .fns =
+        function(m) {
+          purrr::map2(
+            .x = m,
+            .y = gm_dt,
+            function(m, d) {
+              shots <-
+                training_data |>
+                dplyr::filter(
+                  game_date == d,
+                  shot_y > 0,
+                  shot_zone == "O",
+                  position_category != "G",
+                  event_team_strength == "EV",
+                  home_skater_strength_state %in% c("5v5"),
+                  event_type != "BLOCK"
+                ) |>
+                dplyr::inner_join(
+                  goalie_geometry,
+                  by = c("shot_x", "shot_y")
+                ) |>
+                dplyr::select(
+                  tidyselect::any_of(c("is_goal", coef(m) |> rownames()))
+                )
+
+              xg = predict(
+                m,
+                model.matrix(
+                  is_goal ~ .,
+                  shots
+                )[, -1],
+                type = "response"
+              ) |>
+                as.double()
+            }
+          )
+        }
+    ),
+    is_goal =
+      purrr::map(
+        gm_dt,
+        function(d) {
+          training_data |>
+            dplyr::filter(
+              game_date == d,
+              shot_y > 0,
+              shot_zone == "O",
+              position_category != "G",
+              event_team_strength == "EV",
+              home_skater_strength_state %in% c("5v5"),
+              event_type != "BLOCK"
+            ) |>
+            dplyr::pull(is_goal)
+        }
+      )
+  ) |>
+  tidyr::unnest(tidyselect::everything()) |>
+  dplyr::select(-c(season, gm_dt)) |>
+  dplyr::summarise(
+    dplyr::across(
+      rebound_follow_own_secs_velo:rebound,
+      .fns = function(xg) {
+        sum(xg) / sum(is_goal)
+      },
+      .names = "{.col}_calib"
+    ),
+    dplyr::across(
+      rebound_follow_own_secs_velo:rebound,
+      .fns = function(xg) {
+        MLmetrics::LogLoss(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_ll"
+    ),
+    dplyr::across(
+      rebound_follow_own_secs_velo:rebound,
+      .fns = function(xg) {
+        MLmetrics::AUC(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_auc"
+    )
+  ) |>
+  tidyr::pivot_longer(tidyselect::everything()) |>
+  dplyr::transmute(
+    value,
+    model = name |> stringr::str_remove("_(calib|ll|auc)$"),
+    metric = name |> stringr::str_extract("(calib|ll|auc)$")
+  ) |>
+  tidyr::pivot_wider(
+    id_cols = model,
+    names_from = metric,
+    values_from = value
+  )
+
 View(rebound_metrics)
 
 
 
+dynamic_xg_score_testing <-
+  # test <-
+  nhl_db_con |>
+  odbc::dbGetQuery(
+    "select season, game_id gm_id, game_date gm_dt from games where season >= 20212022 and session = 2"
+  ) |>
+  tibble::tibble() |>
+  dplyr::arrange(season, gm_dt, gm_id) |>
+  tibble::rowid_to_column(var = "game_num") |>
+  dplyr::filter(game_num > 1312) |>
+  dplyr::group_by(season, gm_dt) |>
+  dplyr::summarise(min = min(game_num), .groups = "drop") |>
+  # dplyr::group_by(season) |>
+  # dplyr::filter(lubridate::day(gm_dt) == 12) |>
+  # View()
+  # head(1) |>
+  dplyr::mutate(
+    xg_results =
+      purrr::map2(
+        gm_dt,
+        min,
+        function(dt, m) {
+          start_time <- Sys.time()
+
+          print(
+            "{dt} start" |>
+              glue::glue()
+          )
+
+          shots <-
+            training_data |>
+            dplyr::filter(
+              shot_y > 0,
+              shot_zone == "O",
+              position_category != "G",
+              event_team_strength == "EV",
+              home_skater_strength_state %in% c("5v5"),
+              game_num < m, game_num >= m - 1312,
+              event_type != "BLOCK"
+            ) |>
+            dplyr::inner_join(
+              goalie_geometry,
+              by = c("shot_x", "shot_y")
+            )
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_off +
+                is_shell_def +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_trailing_oshell_dshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_off +
+                is_shell_def +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_leading_trailing_oshell_dshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_off +
+                is_shell_def +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_trailing_oshell_dshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_off +
+                is_shell_def,
+              shots
+            )[, -1]
+
+          min_leading_trailing_oshell_dshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_off +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_trailing_oshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_off +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_leading_trailing_oshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_off +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_trailing_oshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_off,
+              shots
+            )[, -1]
+
+          min_leading_trailing_oshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_def +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_trailing_dshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_def +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_leading_trailing_dshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_def +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_trailing_dshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                is_shell_def,
+              shots
+            )[, -1]
+
+          min_leading_trailing_dshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_trailing_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_leading_trailing_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_trailing_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_trailing,
+              shots
+            )[, -1]
+
+          min_leading_trailing <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_off +
+                is_shell_def +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_oshell_dshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_off +
+                is_shell_def +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_leading_oshell_dshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_off +
+                is_shell_def +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_oshell_dshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_off +
+                is_shell_def,
+              shots
+            )[, -1]
+
+          min_leading_oshell_dshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_off +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_oshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_off +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_leading_oshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_off +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_oshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_off,
+              shots
+            )[, -1]
+
+          min_leading_oshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_def +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_dshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_def +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_leading_dshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_def +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_dshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_shell_def,
+              shots
+            )[, -1]
+
+          min_leading_dshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_leading_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_leading_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading,
+              shots
+            )[, -1]
+
+          min_leading <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_off +
+                is_shell_def +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_trailing_oshell_dshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_off +
+                is_shell_def +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_trailing_oshell_dshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_off +
+                is_shell_def +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_trailing_oshell_dshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_off +
+                is_shell_def,
+              shots
+            )[, -1]
+
+          min_trailing_oshell_dshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_off +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_trailing_oshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_off +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_trailing_oshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_off +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_trailing_oshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_off,
+              shots
+            )[, -1]
+
+          min_trailing_oshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_def +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_trailing_dshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_def +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_trailing_dshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_def +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_trailing_dshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                is_shell_def,
+              shots
+            )[, -1]
+
+          min_trailing_dshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_trailing_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_trailing_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_trailing_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_trailing,
+              shots
+            )[, -1]
+
+          min_trailing <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_off +
+                is_shell_def +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_oshell_dshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_off +
+                is_shell_def +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_oshell_dshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_off +
+                is_shell_def +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_oshell_dshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_off +
+                is_shell_def,
+              shots
+            )[, -1]
+
+          min_oshell_dshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_off +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_oshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_off +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_oshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_off +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_oshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_off,
+              shots
+            )[, -1]
+
+          min_oshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_def +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_dshell_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_def +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_dshell_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_def +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_dshell_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_shell_def,
+              shots
+            )[, -1]
+
+          min_dshell <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                play_for_tie +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_tie_garbage <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                play_for_tie,
+              shots
+            )[, -1]
+
+          min_tie <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                garbage_time,
+              shots
+            )[, -1]
+
+          min_garbage <- get_min_model(mat, shots$is_goal)
+
+          print("time: {(Sys.time() - start_time) |> hms::as_hms() |> round() |> hms::as_hms()}" |> glue::glue())
+
+          tibble::tibble(
+            leading_trailing_oshell_dshell_tie_garbage = list(min_leading_trailing_oshell_dshell_tie_garbage),
+            leading_trailing_oshell_dshell_tie = list(min_leading_trailing_oshell_dshell_tie),
+            leading_trailing_oshell_dshell_garbage = list(min_leading_trailing_oshell_dshell_garbage),
+            leading_trailing_oshell_dshell = list(min_leading_trailing_oshell_dshell),
+            leading_trailing_oshell_tie_garbage = list(min_leading_trailing_oshell_tie_garbage),
+            leading_trailing_oshell_tie = list(min_leading_trailing_oshell_tie),
+            leading_trailing_oshell_garbage = list(min_leading_trailing_oshell_garbage),
+            leading_trailing_oshell = list(min_leading_trailing_oshell),
+            leading_trailing_dshell_tie_garbage = list(min_leading_trailing_dshell_tie_garbage),
+            leading_trailing_dshell_tie = list(min_leading_trailing_dshell_tie),
+            leading_trailing_dshell_garbage = list(min_leading_trailing_dshell_garbage),
+            leading_trailing_dshell = list(min_leading_trailing_dshell),
+            leading_trailing_tie_garbage = list(min_leading_trailing_tie_garbage),
+            leading_trailing_tie = list(min_leading_trailing_tie),
+            leading_trailing_garbage = list(min_leading_trailing_garbage),
+            leading_trailing = list(min_leading_trailing),
+            leading_oshell_dshell_tie_garbage = list(min_leading_oshell_dshell_tie_garbage),
+            leading_oshell_dshell_tie = list(min_leading_oshell_dshell_tie),
+            leading_oshell_dshell_garbage = list(min_leading_oshell_dshell_garbage),
+            leading_oshell_dshell = list(min_leading_oshell_dshell),
+            leading_oshell_tie_garbage = list(min_leading_oshell_tie_garbage),
+            leading_oshell_tie = list(min_leading_oshell_tie),
+            leading_oshell_garbage = list(min_leading_oshell_garbage),
+            leading_oshell = list(min_leading_oshell),
+            leading_dshell_tie_garbage = list(min_leading_dshell_tie_garbage),
+            leading_dshell_tie = list(min_leading_dshell_tie),
+            leading_dshell_garbage = list(min_leading_dshell_garbage),
+            leading_dshell = list(min_leading_dshell),
+            leading_tie_garbage = list(min_leading_tie_garbage),
+            leading_tie = list(min_leading_tie),
+            leading_garbage = list(min_leading_garbage),
+            leading = list(min_leading),
+            trailing_oshell_dshell_tie_garbage = list(min_trailing_oshell_dshell_tie_garbage),
+            trailing_oshell_dshell_tie = list(min_trailing_oshell_dshell_tie),
+            trailing_oshell_dshell_garbage = list(min_trailing_oshell_dshell_garbage),
+            trailing_oshell_dshell = list(min_trailing_oshell_dshell),
+            trailing_oshell_tie_garbage = list(min_trailing_oshell_tie_garbage),
+            trailing_oshell_tie = list(min_trailing_oshell_tie),
+            trailing_oshell_garbage = list(min_trailing_oshell_garbage),
+            trailing_oshell = list(min_trailing_oshell),
+            trailing_dshell_tie_garbage = list(min_trailing_dshell_tie_garbage),
+            trailing_dshell_tie = list(min_trailing_dshell_tie),
+            trailing_dshell_garbage = list(min_trailing_dshell_garbage),
+            trailing_dshell = list(min_trailing_dshell),
+            trailing_tie_garbage = list(min_trailing_tie_garbage),
+            trailing_tie = list(min_trailing_tie),
+            trailing_garbage = list(min_trailing_garbage),
+            trailing = list(min_trailing),
+            oshell_dshell_tie_garbage = list(min_oshell_dshell_tie_garbage),
+            oshell_dshell_tie = list(min_oshell_dshell_tie),
+            oshell_dshell_garbage = list(min_oshell_dshell_garbage),
+            oshell_dshell = list(min_oshell_dshell),
+            oshell_tie_garbage = list(min_oshell_tie_garbage),
+            oshell_tie = list(min_oshell_tie),
+            oshell_garbage = list(min_oshell_garbage),
+            oshell = list(min_oshell),
+            dshell_tie_garbage = list(min_dshell_tie_garbage),
+            dshell_tie = list(min_dshell_tie),
+            dshell_garbage = list(min_dshell_garbage),
+            dshell = list(min_dshell),
+            tie_garbage = list(min_tie_garbage),
+            tie = list(min_tie),
+            garbage = list(min_garbage)
+          )
+        }
+      )
+  )
+
+dynamic_xg_score_testing |>
+  dplyr::ungroup() |>
+  dplyr::select(xg_results) |>
+  tidyr::unnest(xg_results) |>
+  tidyr::pivot_longer(
+    tidyselect::everything(),
+    names_to = "model"
+  ) |>
+  dplyr::mutate(
+    coefs =
+      purrr::map(
+        value,
+        function(m) {
+          coef(m) |>
+            as.matrix() |>
+            as.data.frame() |>
+            tibble::rownames_to_column() |>
+            tibble::as_tibble()
+        }
+      )
+  ) |>
+  dplyr::select(-c(value)) |>
+  tidyr::unnest(coefs) |>
+  dplyr::filter(
+    !rowname %in% c("(Intercept)", "dist_to_goalie_optimal", "width_at_net", "avg_height", "is_slap", "is_tip", "is_other")
+  ) |>
+  tidyr::pivot_wider(
+    id_cols = model,
+    values_from = s0,
+    names_from = rowname
+  ) |>
+  View()
+
+score_metrics <-
+  dynamic_xg_score_testing |>
+  tidyr::unnest(xg_results) |>
+  dplyr::transmute(
+    season,
+    gm_dt,
+    dplyr::across(
+      -c(season:min),
+      .fns =
+        function(m) {
+          purrr::map2(
+            .x = m,
+            .y = gm_dt,
+            function(m, d) {
+              shots <-
+                training_data |>
+                dplyr::filter(
+                  game_date == d,
+                  shot_y > 0,
+                  shot_zone == "O",
+                  position_category != "G",
+                  event_team_strength == "EV",
+                  home_skater_strength_state %in% c("5v5"),
+                  event_type != "BLOCK"
+                ) |>
+                dplyr::inner_join(
+                  goalie_geometry,
+                  by = c("shot_x", "shot_y")
+                ) |>
+                dplyr::select(
+                  tidyselect::any_of(c("is_goal", coef(m) |> rownames()))
+                )
+
+              xg = predict(
+                m,
+                model.matrix(
+                  is_goal ~ .,
+                  shots
+                )[, -1],
+                type = "response"
+              ) |>
+                as.double()
+            }
+          )
+        }
+    ),
+    is_goal =
+      purrr::map(
+        gm_dt,
+        function(d) {
+          training_data |>
+            dplyr::filter(
+              game_date == d,
+              shot_y > 0,
+              shot_zone == "O",
+              position_category != "G",
+              event_team_strength == "EV",
+              home_skater_strength_state %in% c("5v5"),
+              event_type != "BLOCK"
+            ) |>
+            dplyr::pull(is_goal)
+        }
+      )
+  ) |>
+  tidyr::unnest(tidyselect::everything()) |>
+  dplyr::select(-c(season, gm_dt)) |>
+  dplyr::summarise(
+    dplyr::across(
+      turn_oz_same_secs:turn,
+      .fns = function(xg) {
+        sum(xg) / sum(is_goal)
+      },
+      .names = "{.col}_calib"
+    ),
+    dplyr::across(
+      turn_oz_same_secs:turn,
+      .fns = function(xg) {
+        MLmetrics::LogLoss(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_ll"
+    ),
+    dplyr::across(
+      turn_oz_same_secs:turn,
+      .fns = function(xg) {
+        MLmetrics::AUC(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_auc"
+    )
+  ) |>
+  tidyr::pivot_longer(tidyselect::everything()) |>
+  dplyr::transmute(
+    value,
+    model = name |> stringr::str_remove("_(calib|ll|auc)$"),
+    metric = name |> stringr::str_extract("(calib|ll|auc)$")
+  ) |>
+  tidyr::pivot_wider(
+    id_cols = model,
+    names_from = metric,
+    values_from = value
+  )
+
+View(score_metrics)
