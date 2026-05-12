@@ -4623,14 +4623,14 @@ detailed_context_metrics <-
   dplyr::select(-c(season, gm_dt)) |>
   dplyr::summarise(
     dplyr::across(
-      fac_win_secs:fac,
+      det_score_rush_fac_turn:det_rush_rebound_fac_turn,
       .fns = function(xg) {
         sum(xg) / sum(is_goal)
       },
       .names = "{.col}_calib"
     ),
     dplyr::across(
-      fac_win_secs:fac,
+      det_score_rush_fac_turn:det_rush_rebound_fac_turn,
       .fns = function(xg) {
         MLmetrics::LogLoss(
           xg,
@@ -4640,7 +4640,7 @@ detailed_context_metrics <-
       .names = "{.col}_ll"
     ),
     dplyr::across(
-      fac_win_secs:fac,
+      det_score_rush_fac_turn:det_rush_rebound_fac_turn,
       .fns = function(xg) {
         MLmetrics::AUC(
           xg,
@@ -4653,8 +4653,8 @@ detailed_context_metrics <-
   tidyr::pivot_longer(tidyselect::everything()) |>
   dplyr::transmute(
     value,
-    model = name |> stringr::str_remove("_(calib|ll|auc)"),
-    metric = name |> stringr::str_extract("calib|ll|auc")
+    model = name |> stringr::str_remove("_(calib|ll|auc)$"),
+    metric = name |> stringr::str_extract("(calib|ll|auc)$")
   ) |>
   tidyr::pivot_wider(
     id_cols = model,
@@ -4662,4 +4662,393 @@ detailed_context_metrics <-
     values_from = value
   )
 
-View(fac_metrics)
+View(detailed_context_metrics)
+
+
+
+
+
+dynamic_xg_det_testing |>
+  # dplyr::filter(lubridate::day(gm_dt) == 12) |>
+  dplyr::ungroup() |>
+  dplyr::select(gm_dt, xg_results) |>
+  tidyr::unnest(xg_results) |>
+  dplyr::select(gm_dt, det_score_rush_rebound_fac_turn) |>
+  dplyr::mutate(
+    coefs =
+      purrr::map(
+        det_score_rush_rebound_fac_turn,
+        function(m) {
+          coef(m) |>
+            as.matrix() |>
+            as.data.frame() |>
+            tibble::rownames_to_column() |>
+            tibble::as_tibble()
+        }
+      )
+  ) |>
+  dplyr::select(-c(det_score_rush_rebound_fac_turn)) |>
+  tidyr::unnest(coefs) |>
+  dplyr::filter(
+    rowname != "(Intercept)"
+    # !rowname %in% c("(Intercept)", "is_slap", "is_tip", "is_other")
+  ) |>
+  # tidyr::pivot_wider(
+  #   id_cols = c(model, gm_dt),
+  #   values_from = s0,
+  #   names_from = rowname
+  # ) |>
+  ggplot2::ggplot(ggplot2::aes(x = dplyr::dense_rank(gm_dt), y = s0)) +
+  ggplot2::facet_wrap(ggplot2::vars(rowname), scales = "fixed", nrow = 4) +
+  ggplot2::geom_hline(yintercept = 0, color = "red", linetype = 2) +
+  ggplot2::geom_line(linewidth = 1) +
+  ggplot2::scale_color_viridis_d() +
+  ggplot2::theme(legend.position = "bottom")
+
+
+
+
+
+
+dynamic_xg_blocker_testing <-
+  # test <-
+  nhl_db_con |>
+  odbc::dbGetQuery(
+    "select season, game_id gm_id, game_date gm_dt from games where season >= 20212022 and session = 2"
+  ) |>
+  tibble::tibble() |>
+  dplyr::arrange(season, gm_dt, gm_id) |>
+  tibble::rowid_to_column(var = "game_num") |>
+  dplyr::filter(game_num > 1312) |>
+  dplyr::group_by(season, gm_dt) |>
+  dplyr::summarise(min = min(game_num), .groups = "drop") |>
+  dplyr::left_join(shot_blocker_density_ests) |>
+  # dplyr::group_by(season) |>
+  # dplyr::filter(lubridate::day(gm_dt) == 12) |>
+  # View()
+  head(1) |>
+  dplyr::mutate(
+    xg_results =
+      purrr::map2(
+        pmap(
+          list(
+            dt = gm_dt,
+            m = min,
+            basic = shot_blocker_data_5v5_basic,
+            shot_type = shot_blocker_data_5v5_shot_type,
+            shot_type_point = shot_blocker_data_5v5_shot_type_point
+          )
+        ),
+        function(dt, m, basic, shot_type, shot_type_point) {
+          start_time <- Sys.time()
+
+          print(
+            "{dt} start" |>
+              glue::glue()
+          )
+
+          shots <-
+            training_data |>
+            dplyr::filter(
+              shot_y > 0,
+              shot_zone == "O",
+              position_category != "G",
+              event_team_strength == "EV",
+              home_skater_strength_state %in% c("5v5"),
+              game_num < m, game_num >= m - 1312,
+              event_type != "BLOCK"
+            ) |>
+            dplyr::inner_join(
+              goalie_geometry,
+              by = c("shot_x", "shot_y")
+            ) |>
+            dplyr::left_join(
+              basic |>
+                dplyr::select(
+                  shot_x, shot_y, blockers_basic = blocker_dens
+                ),
+              by = c("shot_x", "shot_y")
+            ) |>
+            dplyr::left_join(
+              shot_type |>
+                dplyr::select(
+                  shot_x, shot_y, blockers_type = blocker_dens
+                ),
+              by = c("shot_x", "shot_y")
+            ) |>
+            dplyr::left_join(
+              shot_type_point |>
+                dplyr::select(
+                  shot_x, shot_y, blockers_point = blocker_dens
+                ),
+              by = c("shot_x", "shot_y")
+            )
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_rush +
+                rush_secs +
+                rush_velo +
+                is_reached_goalie_followup +
+                is_followup_shot +
+                is_own_followup +
+                followup_secs +
+                angle_change_velo +
+                is_off_faceoff +
+                faceoff_secs +
+                is_off_turnover +
+                is_oz_turnover +
+                turnover_secs,
+              shots
+            )[, -1]
+
+          min_score_rush_rebound_fac_turn <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_rush +
+                rush_secs +
+                rush_velo +
+                is_reached_goalie_followup +
+                is_followup_shot +
+                is_own_followup +
+                followup_secs +
+                angle_change_velo +
+                is_off_faceoff +
+                faceoff_secs +
+                is_off_turnover +
+                is_oz_turnover +
+                turnover_secs +
+                blockers_basic,
+              shots
+            )[, -1]
+
+          min_score_rush_rebound_fac_turn_basic <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_rush +
+                rush_secs +
+                rush_velo +
+                is_reached_goalie_followup +
+                is_followup_shot +
+                is_own_followup +
+                followup_secs +
+                angle_change_velo +
+                is_off_faceoff +
+                faceoff_secs +
+                is_off_turnover +
+                is_oz_turnover +
+                turnover_secs +
+                blockers_type,
+              shots
+            )[, -1]
+
+          min_score_rush_rebound_fac_turn_type <- get_min_model(mat, shots$is_goal)
+
+          mat <-
+            model.matrix(
+              is_goal ~
+                dist_to_goalie_optimal +
+                width_at_net +
+                avg_height +
+                is_slap +
+                is_tip +
+                is_other +
+                is_leading +
+                is_rush +
+                rush_secs +
+                rush_velo +
+                is_reached_goalie_followup +
+                is_followup_shot +
+                is_own_followup +
+                followup_secs +
+                angle_change_velo +
+                is_off_faceoff +
+                faceoff_secs +
+                is_off_turnover +
+                is_oz_turnover +
+                turnover_secs +
+                blockers_point,
+              shots
+            )[, -1]
+
+          min_score_rush_rebound_fac_turn_point <- get_min_model(mat, shots$is_goal)
+
+          print("time: {(Sys.time() - start_time) |> hms::as_hms() |> round() |> hms::as_hms()}" |> glue::glue())
+
+          tibble::tibble(
+            det_score_rush_rebound_fac_turn = list(min_score_rush_rebound_fac_turn),
+            det_score_rush_rebound_fac_turn_basic = list(min_score_rush_rebound_fac_turn_basic),
+            det_score_rush_rebound_fac_turn_type = list(min_score_rush_rebound_fac_turn_type),
+            det_score_rush_rebound_fac_turn_point = list(min_score_rush_rebound_fac_turn_point)
+          )
+        }
+      )
+  )
+
+dynamic_xg_blocker_testing |>
+  dplyr::ungroup() |>
+  dplyr::select(xg_results) |>
+  tidyr::unnest(xg_results) |>
+  tidyr::pivot_longer(
+    tidyselect::everything(),
+    names_to = "model"
+  ) |>
+  dplyr::mutate(
+    coefs =
+      purrr::map(
+        value,
+        function(m) {
+          coef(m) |>
+            as.matrix() |>
+            as.data.frame() |>
+            tibble::rownames_to_column() |>
+            tibble::as_tibble()
+        }
+      )
+  ) |>
+  dplyr::select(-c(value)) |>
+  tidyr::unnest(coefs) |>
+  dplyr::filter(
+    !rowname %in% c("(Intercept)", "width_at_net", "avg_height", "is_slap", "is_tip", "is_other")
+  ) |>
+  tidyr::pivot_wider(
+    id_cols = model,
+    values_from = s0,
+    names_from = rowname
+  ) |>
+  View()
+
+detailed_context_metrics <-
+  dynamic_xg_det_testing |>
+  tidyr::unnest(xg_results) |>
+  dplyr::transmute(
+    season,
+    gm_dt,
+    dplyr::across(
+      -c(season:min),
+      .fns =
+        function(m) {
+          purrr::map2(
+            .x = m,
+            .y = gm_dt,
+            function(m, d) {
+              shots <-
+                training_data |>
+                dplyr::filter(
+                  game_date == d,
+                  shot_y > 0,
+                  shot_zone == "O",
+                  position_category != "G",
+                  event_team_strength == "EV",
+                  home_skater_strength_state %in% c("5v5"),
+                  event_type != "BLOCK"
+                ) |>
+                dplyr::inner_join(
+                  goalie_geometry,
+                  by = c("shot_x", "shot_y")
+                ) |>
+                dplyr::select(
+                  tidyselect::any_of(c("is_goal", coef(m) |> rownames()))
+                )
+
+              xg = predict(
+                m,
+                model.matrix(
+                  is_goal ~ .,
+                  shots
+                )[, -1],
+                type = "response"
+              ) |>
+                as.double()
+            }
+          )
+        }
+    ),
+    is_goal =
+      purrr::map(
+        gm_dt,
+        function(d) {
+          training_data |>
+            dplyr::filter(
+              game_date == d,
+              shot_y > 0,
+              shot_zone == "O",
+              position_category != "G",
+              event_team_strength == "EV",
+              home_skater_strength_state %in% c("5v5"),
+              event_type != "BLOCK"
+            ) |>
+            dplyr::pull(is_goal)
+        }
+      )
+  ) |>
+  tidyr::unnest(tidyselect::everything()) |>
+  dplyr::select(-c(season, gm_dt)) |>
+  dplyr::summarise(
+    dplyr::across(
+      det_score_rush_fac_turn:det_rush_rebound_fac_turn,
+      .fns = function(xg) {
+        sum(xg) / sum(is_goal)
+      },
+      .names = "{.col}_calib"
+    ),
+    dplyr::across(
+      det_score_rush_fac_turn:det_rush_rebound_fac_turn,
+      .fns = function(xg) {
+        MLmetrics::LogLoss(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_ll"
+    ),
+    dplyr::across(
+      det_score_rush_fac_turn:det_rush_rebound_fac_turn,
+      .fns = function(xg) {
+        MLmetrics::AUC(
+          xg,
+          is_goal
+        )
+      },
+      .names = "{.col}_auc"
+    )
+  ) |>
+  tidyr::pivot_longer(tidyselect::everything()) |>
+  dplyr::transmute(
+    value,
+    model = name |> stringr::str_remove("_(calib|ll|auc)$"),
+    metric = name |> stringr::str_extract("(calib|ll|auc)$")
+  ) |>
+  tidyr::pivot_wider(
+    id_cols = model,
+    names_from = metric,
+    values_from = value
+  )
+
+View(detailed_context_metrics)
