@@ -424,6 +424,18 @@ load_and_clean_shot_data <- function(game_ids) {
     dplyr::ungroup()
 }
 
+pred_xg_shot_data_19 <-
+  list.files("../scraper_testing/clean_files", pattern = "pbp_201902") |>
+  stringr::str_extract("\\d{10}") |>
+  sort() |>
+  load_and_clean_shot_data()
+
+pred_xg_shot_data_20 <-
+  list.files("../scraper_testing/clean_files", pattern = "pbp_202002") |>
+  stringr::str_extract("\\d{10}") |>
+  sort() |>
+  load_and_clean_shot_data()
+
 pred_xg_shot_data_21 <-
   list.files("../scraper_testing/clean_files", pattern = "pbp_202102") |>
   stringr::str_extract("\\d{10}") |>
@@ -454,9 +466,30 @@ pred_xg_shot_data_25 <-
   sort() |>
   load_and_clean_shot_data()
 
+
+pred_xg_shot_data_21 |>
+  dplyr::mutate(
+    in_rink =
+      !(shot_y <= 17 & shot_x <= -14.5 & sqrt((shot_x - -14.5)**2 + (shot_y - 17)**2) > 28) &
+      !(shot_y <= 17 & shot_x >= 14.5 & sqrt((shot_x - 14.5)**2 + (shot_y - 17)**2) > 28),
+    shot_x = ifelse(!in_rink, shot_x - (sign(shot_x)), shot_x),
+    in_rink =
+      !(shot_y <= 17 & shot_x <= -14.5 & sqrt((shot_x - -14.5)**2 + (shot_y - 17)**2) > 28) &
+      !(shot_y <= 17 & shot_x >= 14.5 & sqrt((shot_x - 14.5)**2 + (shot_y - 17)**2) > 28)
+  ) |>
+  dplyr::filter(!in_rink)
+
 training_data <-
-  pred_xg_shot_data_21 |>
-  dplyr::mutate(season = "21-22") |>
+  pred_xg_shot_data_19 |>
+  dplyr::mutate(season = "19-20") |>
+  dplyr::bind_rows(
+    pred_xg_shot_data_20 |>
+      dplyr::mutate(season = "20-21")
+  ) |>
+  dplyr::bind_rows(
+    pred_xg_shot_data_21 |>
+      dplyr::mutate(season = "21-22")
+  ) |>
   dplyr::bind_rows(
     pred_xg_shot_data_22 |>
       dplyr::mutate(season = "22-23")
@@ -471,7 +504,7 @@ training_data <-
   ) |>
   dplyr::bind_rows(
     pred_xg_shot_data_25 |>
-      dplyr::mutate(season = "25-25")
+      dplyr::mutate(season = "25-26")
   ) |>
   dplyr::mutate(
     is_goal = as.integer(event_type == "GOAL"),
@@ -544,7 +577,7 @@ training_data <-
   dplyr::left_join(
     nhl_db_con |>
       odbc::dbGetQuery(
-        "select game_id, game_date from games where season >= 20212022 and session = 2"
+        "select game_id, game_date from games where season >= 20192020 and session = 2"
       ) |>
       tibble::tibble() |>
       dplyr::arrange(game_date, game_id) |>
